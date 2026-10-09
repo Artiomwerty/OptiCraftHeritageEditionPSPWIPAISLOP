@@ -87,6 +87,11 @@ if(TARGET Ps2MatrixStackTests)
     target_compile_definitions(Ps2MatrixStackTests PRIVATE PS2_PLATFORM=1 MC_LOG_LEVEL=0)
 endif()
 
+opticraft_add_optional_test(PspControlsTests
+    tests/PspControlsTests.cpp
+    src/psp/input/PspControls.cpp
+)
+
 opticraft_add_optional_test(MathHelperFloorTests
     tests/MathHelperFloorTests.cpp
 )

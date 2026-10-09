@@ -36,9 +36,31 @@ LegacyControlPromptBackend, Resources, Diagnostics, GameSettingsBackend,
 PlatformUserSettings, Profiler, ClientProfilerBackend, ClientPlatformPolicy,
 ScreenshotBackend, RenderLightingProfile, TextureResidencyPolicy.
 
-## Open question: control layout
+## Controls (decided)
 
-Requested layout: Pencea-Flavius/Minecraft-PE-PSP ("Layout 1" is its PSP default).
-Its README documents only the DualShock "Layout 4"; Layout 1 is not written down
-publicly and that repository is GPL-3.0, so its code is used as reference only,
-never copied. The mapping has to be taken from the in-game options screen.
+Implemented in `src/psp/input/PspControls.{h,cpp}` as a hardware-free mapper with host
+tests (`tests/PspControlsTests.cpp`). The sceCtrl poller will feed it.
+
+Default layout ("LookButtons"; the PSP has one analog nub):
+
+| Input | Action |
+|---|---|
+| Analog nub | Move |
+| Triangle / Cross / Square / Circle | Look up / down / left / right |
+| R (hold) | Break block |
+| L | Place / use |
+| L + R | Toggle sprint |
+| D-pad left / right | Previous / next hotbar slot |
+| D-pad up | Jump (double-tap: toggle fly) |
+| D-pad down | Toggle sneak |
+| Select | Inventory / crafting |
+| Start | Pause |
+
+Alternative ("LookNub", switchable in settings): D-pad moves, nub looks, Cross jumps,
+Circle sneaks, Triangle inventory, Square next slot, Select previous slot.
+
+Settings: nub deadzone (default 20%), look speed, jump double-tap window.
+
+The Pencea-Flavius/Minecraft-PE-PSP layout could not be retrieved (its README only
+documents a DualShock layout and that repository is GPL-3.0, so it is reference only,
+never copied). This layout is a standard handheld scheme chosen instead.
