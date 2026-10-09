@@ -5,6 +5,7 @@
 // Keep exact hardware/backend checks narrow:
 //   PLATFORM_PS2        -> PlayStation 2 only. Use for pad, Memory Card,
 //                          gsKit/GLES wrapper, PS2SDK, VU/GS, etc.
+//   PLATFORM_PSP        -> Sony PSP only. Use for sceCtrl, sceGu, sceAudio, ms0:/ef0: paths.
 //   PLATFORM_WII        -> Nintendo Wii only. Use for WPAD/PAD, libfat paths,
 //                          the GX wrapper, libogc, ASND, MEM1/MEM2, etc.
 //
@@ -34,6 +35,14 @@
 #    define PLATFORM_WII 1
 #  else
 #    define PLATFORM_WII 0
+#  endif
+#endif
+
+#ifndef PLATFORM_PSP
+#  if defined(PSP_PLATFORM)
+#    define PLATFORM_PSP 1
+#  else
+#    define PLATFORM_PSP 0
 #  endif
 #endif
 

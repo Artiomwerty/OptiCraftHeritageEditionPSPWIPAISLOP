@@ -144,14 +144,33 @@
     {
       "name": "psp-bringup",
       "displayName": "PSP Bring-up (mipsallegrex / pspdev)",
-      "description": "Minimal pspdev toolchain and hardware smoke test. Needs pspdev installed (PSPDEV env var or -DPSPDEV=...). Output: bin/psp/PSP/GAME/OptiCraft/EBOOT.PBP",
+      "description": "PSP hardware smoke test via pspdev. Needs pspdev installed (PSPDEV env var or -DPSPDEV=...). Output: bin/psp/OptiCraft-PSP.zip",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/psp-bringup",
       "toolchainFile": "${sourceDir}/cmake/psp_toolchain.cmake",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "PLATFORM": "PSP",
-        "PSP_BRINGUP": "ON"
+        "PSP_APP": "BRINGUP"
+      }
+    },
+    {
+      "name": "psp-datacheck",
+      "displayName": "PSP Data check / texture viewer",
+      "description": "Mounts assets.pak, decodes textures and draws them with sceGu; tests storage, GPU and controls on a real PSP. Pass -DPSP_ASSET_PAK=<assets.pak> to bundle data into the zip.",
+      "inherits": "psp-bringup",
+      "binaryDir": "${sourceDir}/build/psp-datacheck",
+      "cacheVariables": {
+        "PSP_APP": "DATACHECK"
+      }
+    },
+    {
+      "name": "psp-release",
+      "displayName": "PSP Release (full game, not buildable yet)",
+      "inherits": "psp-bringup",
+      "binaryDir": "${sourceDir}/build/psp-release",
+      "cacheVariables": {
+        "PSP_APP": "GAME"
       }
     }
   ],
@@ -218,8 +237,20 @@
     },
     {
       "name": "psp-bringup",
-      "displayName": "Build PSP Bring-up",
+      "displayName": "Build psp-bringup",
       "configurePreset": "psp-bringup",
+      "jobs": 0
+    },
+    {
+      "name": "psp-datacheck",
+      "displayName": "Build psp-datacheck",
+      "configurePreset": "psp-datacheck",
+      "jobs": 0
+    },
+    {
+      "name": "psp-release",
+      "displayName": "Build psp-release",
+      "configurePreset": "psp-release",
       "jobs": 0
     }
   ]

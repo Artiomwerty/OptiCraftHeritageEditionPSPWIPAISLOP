@@ -92,6 +92,10 @@ opticraft_add_optional_test(PspControlsTests
     src/psp/input/PspControls.cpp
 )
 
+opticraft_add_optional_test(PspFramePacerTests
+    tests/PspFramePacerTests.cpp
+)
+
 opticraft_add_optional_test(MathHelperFloorTests
     tests/MathHelperFloorTests.cpp
 )

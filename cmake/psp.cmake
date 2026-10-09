@@ -7,27 +7,56 @@
 #
 # Target hardware: PSP-2000 and later (64 MB RAM; MEMSIZE=1 grants it).
 #
-#   psp-bringup   Smoke test only: prints RAM/CPU/float speed/storage speed and
-#                 writes bringup.log. Proves toolchain + EBOOT + console agree.
-#   psp-release   The full game. Backend work is in progress; see PSP_PORT.md.
+# PSP_APP selects what gets built (one EBOOT per configure):
+#   BRINGUP    Smoke test: RAM/CPU/float speed/Memory Stick speed -> bringup.log.
+#   DATACHECK  Mounts assets.pak, decodes PNGs, draws them with sceGu, and shows the
+#              live control mapping. Tests storage + GPU + input on a real console.
+#   GAME       The full game. Backend work is in progress; see PSP_PORT.md.
 #
-# Output: bin/psp/OptiCraft/EBOOT.PBP, the Memory Stick tree bin/psp/PSP/GAME/
-# OptiCraft/, and bin/psp/OptiCraft-PSP.zip (extract at the Memory Stick root).
+# Output: bin/psp/OptiCraft-PSP.zip, to extract at the Memory Stick root. Pass
+# -DPSP_ASSET_PAK=<assets.pak> to bundle a (PSP-sized) pak into it; see
+# scripts/make_psp_pak.py.
 
 cmake_minimum_required(VERSION 3.21)
 
 include(${CMAKE_SOURCE_DIR}/cmake/SourceSelection.cmake)
 
-option(PSP_BRINGUP "Build only the PSP hardware smoke test instead of the game" ON)
+set(PSP_APP "BRINGUP" CACHE STRING "Program to build: BRINGUP, DATACHECK or GAME")
+set_property(CACHE PSP_APP PROPERTY STRINGS BRINGUP DATACHECK GAME)
+set(PSP_ASSET_PAK "" CACHE FILEPATH "Optional assets.pak to bundle into the install zip")
 set(MC_LOG_LEVEL "0" CACHE STRING "Unified diagnostic verbosity: 0=off, 1=info, 2=debug, 3=trace")
 set_property(CACHE MC_LOG_LEVEL PROPERTY STRINGS 0 1 2 3)
 
-if(PSP_BRINGUP)
+set(PSP_LIBS pspdebug pspdisplay pspge pspctrl psppower psprtc)
+set(PSP_TITLE "OptiCraft")
+
+if(PSP_APP STREQUAL "BRINGUP")
     set(PSP_SOURCES "${CMAKE_SOURCE_DIR}/src/psp/tools/PspBringup.cpp")
-    message(STATUS "PSP build: BRINGUP (hardware smoke test only)")
+    set(PSP_TITLE "OptiCraft Bring-up")
+    set(PSP_INSTALL_TXT "${CMAKE_SOURCE_DIR}/src/psp/INSTALL.txt")
+elseif(PSP_APP STREQUAL "DATACHECK")
+    set(PSP_SOURCES
+        "${CMAKE_SOURCE_DIR}/src/psp/tools/PspDataCheck.cpp"
+        "${CMAKE_SOURCE_DIR}/src/psp/input/PspControls.cpp"
+        "${CMAKE_SOURCE_DIR}/src/external/stb_image.cpp"
+        "${CMAKE_SOURCE_DIR}/src/platform/Log.cpp"
+        "${CMAKE_SOURCE_DIR}/src/platform/storage/AssetPak.cpp"
+        "${CMAKE_SOURCE_DIR}/src/platform/storage/PakArchive.cpp"
+        "${CMAKE_SOURCE_DIR}/src/platform/storage/PakFile.cpp"
+        "${CMAKE_SOURCE_DIR}/src/platform/storage/StdioStream.cpp"
+        "${CMAKE_SOURCE_DIR}/src/platform/storage/PathUtils.cpp"
+        "${CMAKE_SOURCE_DIR}/src/platform/storage/PosixFileSystem.cpp"
+    )
+    list(APPEND PSP_LIBS pspgu pspgum pspvram)
+    set(PSP_TITLE "OptiCraft Data Check")
+    set(PSP_INSTALL_TXT "${CMAKE_SOURCE_DIR}/src/psp/INSTALL_DATACHECK.txt")
+elseif(PSP_APP STREQUAL "GAME")
+    message(FATAL_ERROR "The full PSP game backend is not buildable yet (see PSP_PORT.md). "
+                        "Use the psp-bringup or psp-datacheck preset.")
 else()
-    message(FATAL_ERROR "The full PSP game backend is not buildable yet; use the psp-bringup preset.")
+    message(FATAL_ERROR "PSP_APP must be BRINGUP, DATACHECK or GAME (got '${PSP_APP}')")
 endif()
+message(STATUS "PSP build: ${PSP_APP}")
 
 add_executable(OptiCraft ${PSP_SOURCES})
 set_target_properties(OptiCraft PROPERTIES
@@ -39,16 +68,21 @@ set_target_properties(OptiCraft PROPERTIES
 target_compile_features(OptiCraft PRIVATE cxx_std_17)
 target_compile_options(OptiCraft PRIVATE -Wall -O2 -fno-math-errno -fno-trapping-math)
 target_compile_definitions(OptiCraft PRIVATE PSP_PLATFORM MC_LOG_LEVEL=${MC_LOG_LEVEL})
-target_include_directories(OptiCraft PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/src/psp")
+target_include_directories(OptiCraft PRIVATE
+    "${CMAKE_SOURCE_DIR}/src"
+    "${CMAKE_SOURCE_DIR}/src/pc"
+    "${CMAKE_SOURCE_DIR}/src/psp"
+    "${CMAKE_SOURCE_DIR}/external/stb"
+)
 
 # Static-library link order: dependents first.
-target_link_libraries(OptiCraft PRIVATE pspdebug pspdisplay pspge pspctrl psppower psprtc)
+target_link_libraries(OptiCraft PRIVATE ${PSP_LIBS} m)
 
 # MEMSIZE=1 asks the firmware for all RAM (64 MB on PSP-2000+). Without it,
 # homebrew gets only ~24 MB even on a 64 MB console.
 create_pbp_file(
     TARGET OptiCraft
-    TITLE "OptiCraft Bring-up"
+    TITLE "${PSP_TITLE}"
     VERSION "${PROJECT_VERSION}"
     MEMSIZE 1
     OUTPUT_DIR "${CMAKE_SOURCE_DIR}/bin/psp/OptiCraft"
@@ -56,13 +90,27 @@ create_pbp_file(
 
 # Stage the Memory Stick layout and a zip. "psp-zip" is part of the default build.
 set(PSP_STAGE "${CMAKE_SOURCE_DIR}/bin/psp")
+set(PSP_STAGE_GAME "${PSP_STAGE}/PSP/GAME/OptiCraft")
 add_custom_target(psp-zip ALL
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${PSP_STAGE}/PSP/GAME/OptiCraft"
-    COMMAND ${CMAKE_COMMAND} -E copy "${PSP_STAGE}/OptiCraft/EBOOT.PBP" "${PSP_STAGE}/PSP/GAME/OptiCraft/EBOOT.PBP"
-    COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_SOURCE_DIR}/src/psp/INSTALL.txt" "${PSP_STAGE}/INSTALL.txt"
-    COMMAND ${CMAKE_COMMAND} -E chdir "${PSP_STAGE}"
-            ${CMAKE_COMMAND} -E tar cf "${PSP_STAGE}/OptiCraft-PSP.zip" --format=zip PSP INSTALL.txt
-    COMMENT "Staging bin/psp/PSP/GAME/OptiCraft and OptiCraft-PSP.zip"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${PSP_STAGE_GAME}"
+    COMMAND ${CMAKE_COMMAND} -E copy "${PSP_STAGE}/OptiCraft/EBOOT.PBP" "${PSP_STAGE_GAME}/EBOOT.PBP"
+    COMMAND ${CMAKE_COMMAND} -E copy "${PSP_INSTALL_TXT}" "${PSP_STAGE}/INSTALL.txt"
+    COMMENT "Staging ${PSP_STAGE_GAME}"
     VERBATIM
 )
+if(PSP_ASSET_PAK)
+    if(NOT EXISTS "${PSP_ASSET_PAK}")
+        message(FATAL_ERROR "PSP_ASSET_PAK does not exist: ${PSP_ASSET_PAK}")
+    endif()
+    add_custom_command(TARGET psp-zip POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy "${PSP_ASSET_PAK}" "${PSP_STAGE_GAME}/assets.pak"
+        VERBATIM)
+elseif(PSP_APP STREQUAL "DATACHECK")
+    message(WARNING "PSP_ASSET_PAK not set: the zip will not contain assets.pak, so "
+                    "the data check will report the pak as missing.")
+endif()
+add_custom_command(TARGET psp-zip POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E chdir "${PSP_STAGE}"
+            ${CMAKE_COMMAND} -E tar cf "${PSP_STAGE}/OptiCraft-PSP.zip" --format=zip PSP INSTALL.txt
+    VERBATIM)
 add_dependencies(psp-zip OptiCraft)

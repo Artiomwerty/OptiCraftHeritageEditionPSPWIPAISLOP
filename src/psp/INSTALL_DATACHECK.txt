@@ -1,0 +1,37 @@
+OptiCraft for PSP - Data check / texture viewer
+===============================================
+
+You need: a PSP with custom firmware (ARK-4, PRO or similar) and a Memory Stick.
+
+1. Plug the Memory Stick into your computer (or put the PSP in USB mode:
+   Settings > USB Connection).
+2. Open the Memory Stick. Look for a folder called PSP at its root.
+3. Copy the PSP folder from this download onto the Memory Stick root. If asked
+   about merging folders, say yes. Result:
+       PSP/GAME/OptiCraft/EBOOT.PBP
+       PSP/GAME/OptiCraft/assets.pak
+   (A PSP Go uses the same layout on its internal storage.)
+4. Eject safely, then on the PSP go to Game > Memory Stick (or Internal Storage).
+   "OptiCraft Data Check" will be in the list. Press X to start it.
+
+What you will see
+-----------------
+First a text report (storage, texture decoding speed). Press X to open the viewer.
+
+Viewer controls (this is the real game layout, so this also tests it):
+  Analog nub ........ pan the image
+  Triangle / Cross .. zoom in / out
+  Square / Circle ... (shown on screen as look yaw)
+  D-pad left/right .. previous / next texture
+  D-pad up .......... reset view
+  Select ............ toggle sharp / smooth filtering
+  Start ............. quit
+The yellow text line shows what the game would receive from each button
+(move, look, break, place, jump, sneak, sprint, fly, hotbar).
+The bottom row "Tested:" lights up green for each action you have tried. Press
+everything once (try L+R together for sprint, and tap D-pad up twice quickly for fly).
+The line under the title shows the 30 fps lock: green means every frame was on time,
+red means some frames were late. The viewer is trivial, so it should stay green.
+
+It also writes datacheck.log beside the EBOOT. If something looks wrong, send me
+that file.

@@ -26,3 +26,12 @@
 // IO must be batched, asynchronous and never on the render thread.
 #define PSP_MS_READ_MBPS_X10            13
 #define PSP_MS_WRITE_MBPS_X10           47
+
+// Frame rate policy: PSP-2000 and later only, locked to 30 fps (every 2nd vblank).
+// The lock caps the rate; HOLDING 30 under load is the job of the render-distance
+// governor (3 chunks by default, stepping down to 2 after sustained slow frames
+// and back up when there is headroom), driven by PspFramePacer::slowFramesInARow().
+#define PSP_TARGET_FPS                  30
+#define PSP_FRAME_VBLANKS               2
+#define PSP_MIN_CHUNK_RADIUS            2
+#define PSP_SLOW_FRAMES_TO_STEP_DOWN    6   // ~0.2 s of consecutive slow frames

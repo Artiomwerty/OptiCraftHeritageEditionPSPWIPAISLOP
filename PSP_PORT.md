@@ -1,6 +1,7 @@
 # PSP port — status and plan
 
-Target: PSP-2000 and later (64 MB RAM, 333 MHz). Build: pspdev (`psp-gcc`).
+Target: PSP-2000 and later only (64 MB RAM, 333 MHz); PSP-1000 is out of scope.
+Frame rate: locked to 30 fps (every 2nd vblank, `PspFramePacer`). Build: pspdev (`psp-gcc`).
 
 ## Status
 
@@ -56,7 +57,10 @@ produces `bin/psp/OptiCraft-PSP.zip` (extract at the Memory Stick root).
 
 ## Decisions
 
-- Visible chunk radius: 3 (`src/psp/PspTuning.h`).
+- Visible chunk radius: 3 (`src/psp/PspTuning.h`), with a governor that drops to 2 when
+  frames run slow and raises it again with headroom, so 30 fps holds.
+- 30 fps lock via `PspFramePacer` (host-tested). Capping is easy; *holding* 30 under
+  load is the governor's job and can only be proven on device.
 - Float-only hot paths (`-fsingle-precision-constant` plus a `real_t` pass).
 
 ## Backend files to write
