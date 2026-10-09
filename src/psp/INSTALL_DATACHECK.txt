@@ -30,6 +30,7 @@ Viewer controls (this is the real game layout, so this also tests it):
   D-pad left/right .. previous / next texture
   D-pad up .......... reset view
   Select ............ toggle sharp / smooth filtering
+  L ................. GPU texture from VRAM / from RAM (logged)
   Start ............. HOLD for 1.5 seconds to quit (a quick tap does nothing)
 The bottom row "Tested:" lights up green for each action you have tried.
 

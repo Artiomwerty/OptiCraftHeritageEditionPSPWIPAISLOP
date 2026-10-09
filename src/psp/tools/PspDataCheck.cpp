@@ -294,6 +294,9 @@ void guInit()
 	g_drawOffset = 0;
 }
 
+bool g_useVram = false;                          // GPU texture source: VRAM copy or system RAM
+constexpr size_t VRAM_TEX_OFFSET = 0x198000;     // after draw, display and depth buffers
+
 struct SpriteVertex { float u, v; float x, y, z; };
 
 void drawTexture(const Texture &t, float cx, float cy, float zoom, bool smooth)
@@ -304,7 +307,18 @@ void drawTexture(const Texture &t, float cx, float cy, float zoom, bool smooth)
 	sceGuEnable(GU_BLEND);
 	sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
 	sceGuTexMode(GU_PSM_8888, 0, 0, 0);
-	sceGuTexImage(0, t.tw, t.th, t.tw, t.pixels);
+	// sceGuInit does not guarantee texture scale/offset: a zero scale makes every UV 0, i.e. one
+	// solid texel colour (looks like a flat gray square). Set them explicitly.
+	sceGuTexScale(1.0f, 1.0f);
+	sceGuTexOffset(0.0f, 0.0f);
+	const void *src = t.pixels;
+	const size_t bytes = static_cast<size_t>(t.tw) * t.th * 4;
+	if (g_useVram && VRAM_TEX_OFFSET + bytes <= 0x200000)
+	{
+		memcpy(reinterpret_cast<void *>(0x44000000 + VRAM_TEX_OFFSET), t.pixels, bytes);
+		src = reinterpret_cast<const void *>(0x04000000 + VRAM_TEX_OFFSET);
+	}
+	sceGuTexImage(0, t.tw, t.th, t.tw, src);
 	sceGuTexFunc(GU_TFX_REPLACE, GU_TCC_RGBA);
 	sceGuTexFilter(smooth ? GU_LINEAR : GU_NEAREST, smooth ? GU_LINEAR : GU_NEAREST);
 	sceGuTexWrap(GU_CLAMP, GU_CLAMP);
@@ -575,6 +589,7 @@ int main(int argc, char **argv)
 			if (zoom > 16.0f) zoom = 16.0f;
 			if (a.jump) { cx = SCR_W * 0.5f; cy = SCR_H * 0.5f; zoom = fitZoom(tex); }
 			if (a.openInventory) smooth = !smooth;
+			if (a.placeOrUse) { g_useVram = !g_useVram; if (g_log) { fprintf(g_log, "GPUSRC  %s\n", g_useVram ? "VRAM" : "RAM"); fflush(g_log); } }
 
 			if (a.hotbarDelta != 0 && presentCount > 1)
 			{
@@ -621,7 +636,7 @@ int main(int argc, char **argv)
 			                     a.jump, a.sneak, a.sprint, state.flying);
 			pspDebugScreenSetXY(0, 32);
 			pspDebugScreenSetTextColor(0xFFC0C0C0);
-			pspDebugScreenPrintf("HOLD START 1.5s to quit | Select: sharp/smooth | D-pad L/R: next\n");
+			pspDebugScreenPrintf("HOLD START 1.5s quit | Select: sharp/smooth | L: tex from %s | D-pad L/R: next\n", g_useVram ? "VRAM" : "RAM");
 			// Controls tally along the bottom: lit = seen at least once.
 			pspDebugScreenSetXY(0, 33);
 			pspDebugScreenSetTextColor(COLOR_WHITE);
