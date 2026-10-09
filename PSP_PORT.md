@@ -22,6 +22,38 @@ produces `bin/psp/OptiCraft-PSP.zip` (extract at the Memory Stick root).
 - `double` is ~57x slower than `float` (1042 ms vs 18 ms). Hot paths must use float.
 - Memory Stick: write 4.7 MB/s, read 1.3 MB/s. Chunk IO must be async and batched.
 
+## Scope measured (syntax check with psp-g++, all common sources)
+
+- 1092 of 1178 shared source files compile for the PSP as-is.
+- The 86 that do not are foreign-platform files (PC/SDL/GL, Wii, PS2) that source
+  selection excludes anyway, plus 14 mod/skin files that only need the include dirs
+  the PS2 build also adds (`src/net/minecraft/src`, `src/mods`). No real code problems.
+- So the remaining work is the PSP layers only:
+  - Small facades (12-140 lines each in the PS2 versions): storage, resources,
+    diagnostics, settings, profiler, platform policy, screenshots, text/gamepad input.
+  - Renderer: implement `platform/RenderAPI.h` (about 100 functions) and
+    `platform/RenderTerrainAPI.h` (about 50) on sceGu. The desktop GL path cannot be
+    reused: it needs display lists and occlusion queries, which the PSP's GL lacks.
+  - Sound: `platform/audio/SoundManager` on sceAudio.
+  - Entry point, File/Runtime shims, crash handler (modeled on `src/wii/`).
+
+## Blockers / constraints
+
+- **Game data is not in the repo.** `assets/` holds only a cursor image. A data pack
+  (textures, sounds, language files) is needed before anything can be drawn.
+  Wii/PS2 builds stage it from `data/assets` and `data/resources`.
+- No emulator can be run in the build sandbox, so every visual test happens on the
+  real PSP. Work is therefore split into small on-device milestones that each print
+  a report to screen and `*.log`.
+
+## Milestones (each ends with an EBOOT to test on device)
+
+1. Storage + data pack: mount assets, read a texture, print results.  
+2. sceGu: draw that texture, then the chunk mesh path with fog and culling.  
+3. Engine init to main menu (input via `PspControls`).  
+4. Walk around a 3-chunk world; tune FPS; float-only hot paths.  
+5. Sound, saves, settings.
+
 ## Decisions
 
 - Visible chunk radius: 3 (`src/psp/PspTuning.h`).
