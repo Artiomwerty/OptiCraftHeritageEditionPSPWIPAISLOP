@@ -34,8 +34,5 @@ Viewer controls (this is the real game layout, so this also tests it):
   Start ............. HOLD for 1.5 seconds to quit (a quick tap does nothing)
 The bottom row "Tested:" lights up green for each action you have tried.
 
-If the game crashes, a red crash report appears (with an address and the last
-stage reached) and waits for a button press. Take a photo of it.
-
 It writes datacheck.log beside the EBOOT (every stage reached, every button
 change, texture pixel values). Please send me that file.

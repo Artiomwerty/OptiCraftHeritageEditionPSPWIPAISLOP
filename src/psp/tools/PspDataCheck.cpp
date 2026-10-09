@@ -85,7 +85,7 @@ void stage(const char *name)
 
 // Runs on an unhandled exception. Keeps to sceIo and the debug screen: the C heap
 // and stdio may be the thing that crashed.
-void crashHandler(PspDebugRegBlock *r)
+[[maybe_unused]] void crashHandler(PspDebugRegBlock *r)
 {
 	char text[1100];
 	snprintf(text, sizeof(text),
@@ -467,7 +467,7 @@ void logPadChange(unsigned buttons)
 
 int main(int argc, char **argv)
 {
-	pspDebugInstallErrorHandler(crashHandler);
+	// Not installed: pspDebugInstallErrorHandler needs a kernel-only import, which stops the EBOOT booting on real hardware.
 	setupExitCallback();
 	pspDebugScreenInit();
 	scePowerSetClockFrequency(333, 333, 166);
