@@ -59,7 +59,7 @@ Default layout ("LookButtons"; the PSP has one analog nub):
 Alternative ("LookNub", switchable in settings): D-pad moves, nub looks, Cross jumps,
 Circle sneaks, Triangle inventory, Square next slot, Select previous slot.
 
-Settings: nub deadzone (default 20%), look speed, jump double-tap window.
+Settings: nub deadzone (default 25%), look speed, jump double-tap window.
 
 The Pencea-Flavius/Minecraft-PE-PSP layout could not be retrieved (its README only
 documents a DualShock layout and that repository is GPL-3.0, so it is reference only,

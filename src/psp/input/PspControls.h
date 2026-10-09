@@ -47,7 +47,7 @@ struct RawPad
 struct Config
 {
 	Layout layout = Layout::LookButtons;
-	float deadzone = 0.20f;          // fraction of full travel ignored (worn nubs drift)
+	float deadzone = 0.25f;          // fraction of full travel ignored (worn nubs drift)
 	float lookSpeed = 1.0f;          // multiplier on look output
 	unsigned doubleTapMs = 300;      // jump double-tap window for fly toggle
 };

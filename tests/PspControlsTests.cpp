@@ -18,15 +18,16 @@ int main()
 	// Centre and drift inside the deadzone give no movement.
 	pad.lx = 128; pad.ly = 128;
 	CHECK(near(map(pad, cfg, st, 0).moveX, 0.f));
-	pad.lx = 128 + 20; // ~0.157 < 0.20
+	pad.lx = 128 + 30; // ~0.236 < 0.25
 	CHECK(near(map(pad, cfg, st, 10).moveX, 0.f));
 
 	// Full nub up = full forward; full right = full strafe right.
 	pad.lx = 255; pad.ly = 0;
 	Actions a = map(pad, cfg, st, 20);
 	CHECK(near(a.moveX, 1.f) && near(a.moveZ, 1.f));
-	CHECK(axis(128 + 26, 0.20f) > 0.f); // just past the deadzone edge starts near 0
-	CHECK(axis(128 + 26, 0.20f) < 0.1f);
+	CHECK(axis(128 + 34, 0.25f) > 0.f); // just past the deadzone edge starts near 0
+	CHECK(axis(128 + 34, 0.25f) < 0.1f);
+	CHECK(axis(128 + 31, 0.25f) == 0.f); // inside the 25% deadzone
 
 	// Face buttons look in LookButtons.
 	pad = RawPad(); pad.buttons = BTN_TRIANGLE | BTN_CIRCLE;
