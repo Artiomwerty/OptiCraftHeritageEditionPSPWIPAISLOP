@@ -8,8 +8,15 @@
 //   3. controls: PspControls (the real game layout) is fed the live pad and its
 //                output is shown, with a tally of which actions have been seen.
 // A text report is printed first and everything is also written to datacheck.log.
+//
+// Diagnostic build: the texture is drawn twice, by the CPU (left, straight into the
+// framebuffer) and by the GPU (right, sceGu sprite), plus an untextured gradient quad
+// as a GPU sanity check. Whichever is wrong tells us where a bug is. A crash handler
+// writes the faulting address and the last stage reached to datacheck.log and the
+// screen; every button press is logged.
 
 #include <pspkernel.h>
+#include <pspiofilemgr.h>
 #include <pspdebug.h>
 #include <pspdisplay.h>
 #include <pspctrl.h>
@@ -65,6 +72,51 @@ void setupExitCallback()
 }
 
 uint64_t nowMs() { return sceKernelGetSystemTimeWide() / 1000ull; }
+
+char g_logPath[300] = {};
+char g_stage[96] = "start";
+
+// Records the last stage reached, so a crash report says where it happened.
+void stage(const char *name)
+{
+	snprintf(g_stage, sizeof(g_stage), "%s", name);
+	if (g_log) { fprintf(g_log, "STAGE   %s  (t=%llu ms)\n", name, static_cast<unsigned long long>(nowMs())); fflush(g_log); }
+}
+
+// Runs on an unhandled exception. Keeps to sceIo and the debug screen: the C heap
+// and stdio may be the thing that crashed.
+void crashHandler(PspDebugRegBlock *r)
+{
+	char text[1100];
+	snprintf(text, sizeof(text),
+	         "\n*** CRASH ***\nstage : %s\nepc   : %08lX\nra    : %08lX\nbadva : %08lX\ncause : %08lX (code %lu)\n"
+	         "sp    : %08lX\na0-a3 : %08lX %08lX %08lX %08lX\nv0/v1 : %08lX %08lX\n"
+	         "(look up epc/ra in OptiCraft.unstripped.elf with psp-addr2line)\n",
+	         g_stage, static_cast<unsigned long>(r->epc), static_cast<unsigned long>(r->r[31]),
+	         static_cast<unsigned long>(r->badvaddr), static_cast<unsigned long>(r->cause),
+	         static_cast<unsigned long>((r->cause >> 2) & 0x1F), static_cast<unsigned long>(r->r[29]),
+	         static_cast<unsigned long>(r->r[4]), static_cast<unsigned long>(r->r[5]),
+	         static_cast<unsigned long>(r->r[6]), static_cast<unsigned long>(r->r[7]),
+	         static_cast<unsigned long>(r->r[2]), static_cast<unsigned long>(r->r[3]));
+	if (g_logPath[0])
+	{
+		SceUID fd = sceIoOpen(g_logPath, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_APPEND, 0777);
+		if (fd >= 0) { sceIoWrite(fd, text, strlen(text)); sceIoClose(fd); }
+	}
+	pspDebugScreenInit();
+	pspDebugScreenSetTextColor(0xFF4040FF);
+	pspDebugScreenPrintf("%s", text);
+	pspDebugScreenSetTextColor(0xFFFFFFFF);
+	pspDebugScreenPrintf("\nPress any button to exit. Send me datacheck.log.\n");
+	SceCtrlData pad;
+	for (;;)
+	{
+		sceCtrlPeekBufferPositive(&pad, 1);
+		if (pad.Buttons) break;
+		sceKernelDelayThread(20000);
+	}
+	sceKernelExitGame();
+}
 
 void say(unsigned color, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 void say(unsigned color, const char *fmt, ...)
@@ -176,6 +228,45 @@ bool makePattern(Texture &t)
 	return ok;
 }
 
+// ---------------------------------------------------------------- CPU path ---
+
+// Draws the texture straight into the framebuffer being drawn (uncached VRAM), no GPU.
+// RGBA bytes in memory == the PSM_8888 framebuffer layout, so words copy across as is.
+void cpuBlit(const Texture &t, unsigned drawOffset, float cx, float cy, float zoom)
+{
+	uint32_t *fb = reinterpret_cast<uint32_t *>(0x44000000u + drawOffset);
+	const float left = cx - t.w * zoom * 0.5f, top = cy - t.h * zoom * 0.5f;
+	const float right = left + t.w * zoom, bottom = top + t.h * zoom;
+	int y0 = static_cast<int>(std::ceil(top)), y1 = static_cast<int>(std::floor(bottom));
+	int x0 = static_cast<int>(std::ceil(left)), x1 = static_cast<int>(std::floor(right));
+	if (y0 < 0) y0 = 0;
+	if (x0 < 0) x0 = 0;
+	if (y1 > SCR_H) y1 = SCR_H;
+	if (x1 > SCR_W) x1 = SCR_W;
+	const float inv = 1.0f / zoom;
+	for (int y = y0; y < y1; ++y)
+	{
+		int sy = static_cast<int>((y + 0.5f - top) * inv);
+		if (sy < 0) sy = 0;
+		if (sy >= t.h) sy = t.h - 1;
+		const uint32_t *srcRow = t.pixels + static_cast<size_t>(sy) * t.tw;
+		uint32_t *dst = fb + static_cast<size_t>(y) * BUF_W;
+		for (int x = x0; x < x1; ++x)
+		{
+			int sx = static_cast<int>((x + 0.5f - left) * inv);
+			if (sx < 0) sx = 0;
+			if (sx >= t.w) sx = t.w - 1;
+			const uint32_t px = srcRow[sx];
+			const unsigned a = px >> 24;
+			if (a == 255) { dst[x] = px; continue; }
+			if (a == 0) continue;
+			const uint32_t d = dst[x];
+			auto mix = [&](unsigned shift) { return ((((px >> shift) & 255) * a + ((d >> shift) & 255) * (255 - a)) / 255) << shift; };
+			dst[x] = 0xFF000000u | mix(0) | mix(8) | mix(16);
+		}
+	}
+}
+
 // ----------------------------------------------------------------- GU setup ---
 
 unsigned int __attribute__((aligned(16))) g_list[262144];
@@ -207,6 +298,8 @@ struct SpriteVertex { float u, v; float x, y, z; };
 
 void drawTexture(const Texture &t, float cx, float cy, float zoom, bool smooth)
 {
+	sceGuTexFlush();
+	sceGuTexSync();
 	sceGuEnable(GU_TEXTURE_2D);
 	sceGuEnable(GU_BLEND);
 	sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
@@ -222,6 +315,22 @@ void drawTexture(const Texture &t, float cx, float cy, float zoom, bool smooth)
 	v[1] = { static_cast<float>(t.w) / t.tw, static_cast<float>(t.h) / t.th, cx + hw, cy + hh, 0.0f };
 	sceGuDrawArray(GU_SPRITES, GU_TEXTURE_32BITF | GU_VERTEX_32BITF | GU_TRANSFORM_2D, 2, nullptr, v);
 	sceGuDisable(GU_TEXTURE_2D);
+}
+
+struct ColorVertex { unsigned color; float x, y, z; };
+
+// Untextured gradient quad: if this shows but the GPU texture does not, the problem
+// is texture upload/sampling, not the GPU or the display setup.
+void drawGradientQuad(float x, float y, float size)
+{
+	sceGuDisable(GU_TEXTURE_2D);
+	sceGuDisable(GU_BLEND);
+	ColorVertex *v = static_cast<ColorVertex *>(sceGuGetMemory(4 * sizeof(ColorVertex)));
+	v[0] = { 0xFF0000FF, x, y, 0.0f };               // red   (ABGR)
+	v[1] = { 0xFF00FF00, x + size, y, 0.0f };        // green
+	v[2] = { 0xFFFF0000, x, y + size, 0.0f };        // blue
+	v[3] = { 0xFFFFFFFF, x + size, y + size, 0.0f }; // white
+	sceGuDrawArray(GU_TRIANGLE_STRIP, GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_2D, 4, nullptr, v);
 }
 
 void beginFrame(unsigned clearColor)
@@ -311,29 +420,56 @@ constexpr int kCandidateCount = sizeof(kCandidates) / sizeof(kCandidates[0]);
 
 float fitZoom(const Texture &t)
 {
-	float z = std::fmin(236.0f / t.h, 440.0f / t.w);
+	float z = std::fmin(236.0f / t.h, 228.0f / t.w);   // two copies fit side by side
 	if (z > 1.0f) z = std::floor(z);   // whole-number zoom keeps pixels crisp
 	return z;
+}
+
+// Logs the RGBA of a few known pixels, so a bad decode shows up in the log as numbers.
+void logProbe(const Texture &t)
+{
+	if (!g_log || !t.pixels) return;
+	static const int pts[][2] = {{8, 8}, {24, 8}, {40, 8}, {8, 24}, {72, 40}, {136, 8}, {200, 100}, {248, 248}};
+	fprintf(g_log, "PROBE   %s (RGBA, as bytes in memory)\n", t.key);
+	for (const auto &pt : pts)
+	{
+		if (pt[0] >= t.w || pt[1] >= t.h) continue;
+		const uint32_t px = t.pixels[static_cast<size_t>(pt[1]) * t.tw + pt[0]];
+		fprintf(g_log, "        (%3d,%3d) = %3u %3u %3u %3u\n", pt[0], pt[1], static_cast<unsigned>(px & 255),
+		        static_cast<unsigned>((px >> 8) & 255), static_cast<unsigned>((px >> 16) & 255), static_cast<unsigned>(px >> 24));
+	}
+	fflush(g_log);
+}
+
+unsigned g_lastPadLogged = 0xFFFFFFFF;
+void logPadChange(unsigned buttons)
+{
+	if (buttons == g_lastPadLogged) return;
+	g_lastPadLogged = buttons;
+	if (g_log) { fprintf(g_log, "PAD     %06X  t=%llu\n", buttons, static_cast<unsigned long long>(nowMs())); fflush(g_log); }
 }
 
 } // namespace
 
 int main(int argc, char **argv)
 {
+	pspDebugInstallErrorHandler(crashHandler);
 	setupExitCallback();
 	pspDebugScreenInit();
 	scePowerSetClockFrequency(333, 333, 166);
 
-	char dir[256], logPath[300];
+	char dir[256];
 	appDir(argc > 0 ? argv[0] : nullptr, dir, sizeof(dir));
-	snprintf(logPath, sizeof(logPath), "%s/datacheck.log", dir);
-	g_log = fopen(logPath, "w");
+	snprintf(g_logPath, sizeof(g_logPath), "%s/datacheck.log", dir);
+	g_log = fopen(g_logPath, "w");
+	stage("main: log opened");
 
 	// ------------------------------------------------------------ report ---
 	say(COLOR_WHITE, "OptiCraft PSP data check\n------------------------\n");
 	say(COLOR_WHITE, "APPDIR  %s\n", dir);
 	say(g_log ? COLOR_WHITE : COLOR_RED, "LOG     %s\n", g_log ? "datacheck.log written beside the EBOOT" : "cannot open datacheck.log (read-only?)");
 
+	stage("mount pak");
 	const bool mounted = AssetPak::mountFrom(dir);
 	say(mounted ? COLOR_GREEN : COLOR_RED, "PAK     %s\n", mounted ? "assets.pak mounted" : "assets.pak NOT FOUND next to the EBOOT");
 
@@ -355,12 +491,14 @@ int main(int argc, char **argv)
 	bool haveTex = false;
 	if (presentCount > 0)
 	{
+		stage("load+decode first texture");
 		haveTex = loadFromPak(kCandidates[present[0]], tex, &why);
 		if (haveTex)
 		{
 			say(COLOR_GREEN, "DECODE  %s\n", tex.key);
 			say(COLOR_WHITE, "        %dx%d (GPU buffer %dx%d), alpha=%s\n", tex.w, tex.h, tex.tw, tex.th, tex.hasAlpha ? "yes" : "no");
 			say(COLOR_WHITE, "        read+decode %llu ms, pixel sum %08lX\n", static_cast<unsigned long long>(tex.loadMs), static_cast<unsigned long>(tex.checksum));
+			logProbe(tex);
 		}
 		else say(COLOR_RED, "DECODE  %s failed: %s\n", kCandidates[present[0]], why);
 	}
@@ -371,7 +509,8 @@ int main(int argc, char **argv)
 	}
 
 	say(COLOR_WHITE, "MEMORY  %u KB free\n", static_cast<unsigned>(sceKernelTotalFreeMemSize() / 1024));
-	say(COLOR_WHITE, "\nPress CROSS to open the viewer, START to quit.\n");
+	say(COLOR_WHITE, "\nPress CROSS to open the viewer (START quits).\n");
+	stage("report done, waiting for CROSS");
 
 	// Wait for CROSS (edge) or START.
 	sceCtrlSetSamplingCycle(0);
@@ -381,6 +520,7 @@ int main(int argc, char **argv)
 	{
 		SceCtrlData pad;
 		sceCtrlPeekBufferPositive(&pad, 1);
+		logPadChange(pad.Buttons);
 		if ((pad.Buttons & PSP_CTRL_CROSS) && !(prev & PSP_CTRL_CROSS) && prev != 0xFFFFFFFF) break;
 		if (pad.Buttons & PSP_CTRL_START) { g_running = false; break; }
 		prev = pad.Buttons;
@@ -390,7 +530,9 @@ int main(int argc, char **argv)
 	// ------------------------------------------------------------ viewer ---
 	if (g_running && haveTex)
 	{
+		stage("guInit");
 		guInit();
+		stage("guInit done");
 		pspDebugScreenEnableBackColor(0);
 
 		PspFramePacer pacer(2);      // 30 fps lock: present every 2nd vblank
@@ -400,6 +542,7 @@ int main(int argc, char **argv)
 		int index = 0;               // position within present[]
 		float cx = SCR_W * 0.5f, cy = SCR_H * 0.5f, zoom = fitZoom(tex);
 		bool smooth = false;
+		uint64_t startHeldSince = 0;
 		uint64_t last = nowMs(), fpsT = last;
 		int frames = 0, fps = 0;
 		unsigned totalFrames = 0;
@@ -413,9 +556,17 @@ int main(int argc, char **argv)
 			last = now;
 			if (dt > 0.1f) dt = 0.1f;
 
-			const PspControls::Actions a = PspControls::map(readPad(), cfg, state, static_cast<unsigned>(now));
+			const PspControls::RawPad rawPad = readPad();
+			logPadChange(rawPad.buttons);
+			const PspControls::Actions a = PspControls::map(rawPad, cfg, state, static_cast<unsigned>(now));
 			tally(seen, a);
-			if (a.pause) break;
+			// Quit only by HOLDING Start, so it cannot be hit by accident.
+			if (rawPad.buttons & PspControls::BTN_START)
+			{
+				if (startHeldSince == 0) startHeldSince = now;
+				if (now - startHeldSince >= 1500) break;
+			}
+			else startHeldSince = 0;
 
 			cx += a.moveX * 220.0f * dt;
 			cy -= a.moveZ * 220.0f * dt;
@@ -444,9 +595,13 @@ int main(int argc, char **argv)
 				}
 			}
 
+			const float leftCx = cx - 122.0f, rightCx = cx + 122.0f;
+			if (totalFrames < 3) { char m[48]; snprintf(m, sizeof(m), "frame %u draw", totalFrames + 1); stage(m); }
 			beginFrame(0xFF303030);
-			drawTexture(tex, cx, cy, zoom, smooth);
+			drawGradientQuad(cx - 6.0f, cy - 6.0f, 12.0f);   // GPU sanity: untextured gradient
+			drawTexture(tex, rightCx, cy, zoom, smooth);     // GPU path (right)
 			endFrameGpu();
+			cpuBlit(tex, g_drawOffset, leftCx, cy, zoom);    // CPU path (left), after the GPU is done
 
 			pspDebugScreenSetXY(0, 0);
 			pspDebugScreenSetTextColor(COLOR_WHITE);
@@ -454,10 +609,19 @@ int main(int argc, char **argv)
 			pspDebugScreenSetTextColor(pacer.slowFrames() == 0 ? COLOR_GREEN : COLOR_RED);
 			pspDebugScreenPrintf("%d fps  30fps lock: %.1f%% on time, %u slow, worst %u vblanks\n", fps,
 			                     pacer.lockedRatio() * 100.0f, pacer.slowFrames(), pacer.worstIntervalVblanks());
+			pspDebugScreenSetXY(2, 3);
+			pspDebugScreenSetTextColor(COLOR_WHITE);
+			pspDebugScreenPrintf("CPU (left)");
+			pspDebugScreenSetXY(33, 3);
+			pspDebugScreenPrintf("GPU (right)");
+			pspDebugScreenSetXY(0, 2);
 			pspDebugScreenSetTextColor(COLOR_YELLOW);
 			pspDebugScreenPrintf("MOVE %+.2f %+.2f  LOOK %+.0f %+.0f  brk%d use%d jmp%d snk%d spr%d fly%d\n",
 			                     a.moveX, a.moveZ, a.lookYaw, a.lookPitch, a.breakBlock, a.placeOrUse,
 			                     a.jump, a.sneak, a.sprint, state.flying);
+			pspDebugScreenSetXY(0, 32);
+			pspDebugScreenSetTextColor(0xFFC0C0C0);
+			pspDebugScreenPrintf("HOLD START 1.5s to quit | Select: sharp/smooth | D-pad L/R: next\n");
 			// Controls tally along the bottom: lit = seen at least once.
 			pspDebugScreenSetXY(0, 33);
 			pspDebugScreenSetTextColor(COLOR_WHITE);
@@ -468,6 +632,8 @@ int main(int argc, char **argv)
 				pspDebugScreenPrintf("%s ", s.name);
 			}
 			presentFrame(pacer);
+			if (totalFrames < 3) { char m[48]; snprintf(m, sizeof(m), "frame %u presented", totalFrames + 1); stage(m); }
+			if (totalFrames == 3) stage("viewer running");
 
 			++frames; ++totalFrames;
 			if (now - fpsT >= 1000) { fps = frames; frames = 0; fpsT = now; }
@@ -485,9 +651,12 @@ int main(int argc, char **argv)
 			fprintf(g_log, "\n");
 			fflush(g_log);
 		}
+		stage("exit: sceGuTerm");
 		sceGuTerm();
+		stage("exit: after sceGuTerm");
 	}
 
+	stage("exit: free + close");
 	freeTexture(tex);
 	if (g_log) fclose(g_log);
 	sceKernelExitGame();

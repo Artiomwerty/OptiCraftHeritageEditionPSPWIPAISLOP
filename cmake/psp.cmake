@@ -47,7 +47,8 @@ elseif(PSP_APP STREQUAL "DATACHECK")
         "${CMAKE_SOURCE_DIR}/src/platform/storage/PathUtils.cpp"
         "${CMAKE_SOURCE_DIR}/src/platform/storage/PosixFileSystem.cpp"
     )
-    list(APPEND PSP_LIBS pspgu pspgum pspvram)
+    list(APPEND PSP_LIBS pspgu pspgum pspvram pspkernel)   # pspkernel: exception handler syscall stub
+    set(PSP_EXTRA_LINK "-Wl,--allow-multiple-definition")  # libc strtol wins (first definition)
     set(PSP_TITLE "OptiCraft Data Check")
     set(PSP_INSTALL_TXT "${CMAKE_SOURCE_DIR}/src/psp/INSTALL_DATACHECK.txt")
 elseif(PSP_APP STREQUAL "GAME")
@@ -77,6 +78,14 @@ target_include_directories(OptiCraft PRIVATE
 
 # Static-library link order: dependents first.
 target_link_libraries(OptiCraft PRIVATE ${PSP_LIBS} m)
+
+# Keep an unstripped copy of the ELF (create_pbp_file strips it in Release) so a crash
+# address from the on-device report can be turned into a function with psp-addr2line.
+# Commands run in the order they are added, so this must come before create_pbp_file.
+add_custom_command(TARGET OptiCraft POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:OptiCraft>" "${CMAKE_SOURCE_DIR}/bin/psp/OptiCraft.unstripped.elf"
+    VERBATIM)
+target_link_options(OptiCraft PRIVATE "-Wl,-Map,${CMAKE_SOURCE_DIR}/bin/psp/OptiCraft.map" ${PSP_EXTRA_LINK})
 
 # MEMSIZE=1 asks the firmware for all RAM (64 MB on PSP-2000+). Without it,
 # homebrew gets only ~24 MB even on a 64 MB console.

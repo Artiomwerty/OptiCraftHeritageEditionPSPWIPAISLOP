@@ -18,20 +18,23 @@ What you will see
 -----------------
 First a text report (storage, texture decoding speed). Press X to open the viewer.
 
+The viewer shows the SAME texture twice, on purpose, to find the gray-squares bug:
+  LEFT  = drawn by the CPU straight into video memory (always works if decoding is OK)
+  RIGHT = drawn by the PSP graphics chip (the way the real game will draw)
+  A small colour gradient square in the middle proves the graphics chip works at all.
+Tell me which side shows the picture, which shows gray, and whether the gradient shows.
+
 Viewer controls (this is the real game layout, so this also tests it):
   Analog nub ........ pan the image
   Triangle / Cross .. zoom in / out
-  Square / Circle ... (shown on screen as look yaw)
   D-pad left/right .. previous / next texture
   D-pad up .......... reset view
   Select ............ toggle sharp / smooth filtering
-  Start ............. quit
-The yellow text line shows what the game would receive from each button
-(move, look, break, place, jump, sneak, sprint, fly, hotbar).
-The bottom row "Tested:" lights up green for each action you have tried. Press
-everything once (try L+R together for sprint, and tap D-pad up twice quickly for fly).
-The line under the title shows the 30 fps lock: green means every frame was on time,
-red means some frames were late. The viewer is trivial, so it should stay green.
+  Start ............. HOLD for 1.5 seconds to quit (a quick tap does nothing)
+The bottom row "Tested:" lights up green for each action you have tried.
 
-It also writes datacheck.log beside the EBOOT. If something looks wrong, send me
-that file.
+If the game crashes, a red crash report appears (with an address and the last
+stage reached) and waits for a button press. Take a photo of it.
+
+It writes datacheck.log beside the EBOOT (every stage reached, every button
+change, texture pixel values). Please send me that file.
