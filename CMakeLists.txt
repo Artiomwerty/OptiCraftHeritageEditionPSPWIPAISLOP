@@ -47,6 +47,16 @@ if(NINTENDO_WII OR (DEFINED PLATFORM AND PLATFORM STREQUAL "WII"))
     return()
 endif()
 
+# Sony PSP build. cmake/psp_toolchain.cmake (wired in by the psp-* presets)
+# defines OPTICRAFT_PSP; -DPLATFORM=PSP works too. Same shape as the PS2/Wii
+# branches: cmake/psp.cmake builds its own target and return()s, so none of the
+# desktop SDL2/glad/OpenGL configuration below runs. Only the bring-up smoke test
+# exists so far; see PSP_PORT.md.
+if(OPTICRAFT_PSP OR (DEFINED PLATFORM AND PLATFORM STREQUAL "PSP"))
+    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/psp.cmake)
+    return()
+endif()
+
 enable_testing()
 
 function(opticraft_add_optional_test target test_source)

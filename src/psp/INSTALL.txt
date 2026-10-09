@@ -1,0 +1,16 @@
+OptiCraft for PSP - how to install
+===================================
+
+You need: a PSP with custom firmware (ARK-4, PRO or similar) and a Memory Stick.
+
+1. Plug the Memory Stick into your computer (or put the PSP in USB mode:
+   Settings > USB Connection).
+2. Open the Memory Stick. Look for a folder called PSP at its root.
+3. Copy the PSP folder from this download onto the Memory Stick root. If asked
+   about merging folders, say yes. Result:  PSP/GAME/OptiCraft/EBOOT.PBP
+4. Eject the card safely, then on the PSP go to Game > Memory Stick.
+   OptiCraft Bring-up will be in the list. Press X to start it.
+5. It prints some numbers and writes a file called bringup.log next to the
+   EBOOT (in PSP/GAME/OptiCraft). Press START to quit.
+
+Testing on a PC first: open PSP/GAME/OptiCraft/EBOOT.PBP in PPSSPP (ppsspp.org).
