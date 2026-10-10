@@ -602,7 +602,7 @@ void traceDraw(const PackedGeom &g)
 void submit(const PackedGeom &g)
 {
     if (!g.verts || g.vertexCount <= 0) return;
-    traceDraw(g);
+    // traceDraw(g);
     applyState(g.lit);
     const void *vertsToDraw = g.verts;
     if (g.needsColor && g.packedColor != g_s.curColor && !g_s.lightmap)
@@ -1406,3 +1406,12 @@ void renderSetLegacyPresentationGamma(bool) {}
 
 // Lets code that talks to sceGu directly (the debug heartbeat) force a full state re-send.
 void pspRenderInvalidateState() { resetApplied(); }
+
+void pspTraceBoundTexture(const char *tag)
+{
+    Texture *t = boundTex();
+    if (!t) { PspSystem::bootTrace("%s: no texture bound (id %d)", tag, g_boundTexture); return; }
+    PspSystem::bootTrace("%s: tex id=%d %dx%d store=%dx%d clamp=%d blur=%d created=%d px0=%08x px1=%08x",
+                         tag, g_boundTexture, t->w, t->h, t->tw, t->th, t->clamp, t->blur, t->created,
+                         t->pixels ? t->pixels[0] : 0u, t->pixels ? t->pixels[t->tw * (t->h / 2) + t->w / 2] : 0u);
+}

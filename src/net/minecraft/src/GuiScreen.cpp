@@ -631,6 +631,13 @@ void GuiScreen::drawBackground(int_t ticks)
 	Tessellator *tess = &Tessellator::instance;
 	renderBindTexture(mc->renderEngine->getTexture("/gui/background.png"));
 	renderColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+#if PLATFORM_PSP
+	{
+		extern void pspTraceBoundTexture(const char *);
+		static int n = 0;
+		if (n++ < 2) pspTraceBoundTexture("GuiScreen::drawBackground");
+	}
+#endif
 	float_t f = 32.0f;
 	tess->startDrawingQuads();
 	tess->setColorOpaque_I(0x404040);

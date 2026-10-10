@@ -1135,6 +1135,9 @@ void Minecraft::run()
         // Surface the real error instead of swallowing it.
         freeMemoryForCrash();
         MC_LOG_ERROR("crash", "Unexpected error: %s\n", throwable.what());
+#if PLATFORM_PSP
+        PspSystem::bootTrace("CRASH std::exception: %s", throwable.what());
+#endif
         // On PS2/Wii, Minecraft::displayUnexpectedThrowable() only ever shows
         // unexpectedthrowable->description on screen -- MinecraftImpl's
         // fuller PanelCrashReport (which pulls what() back out of the stored
