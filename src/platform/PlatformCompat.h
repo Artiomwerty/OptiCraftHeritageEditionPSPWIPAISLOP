@@ -1,6 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#ifdef PSP_PLATFORM
+#include <pspkernel.h>
+#endif
 #include <chrono>
 
 #if defined(PS2_PLATFORM) || defined(WII_PLATFORM)
@@ -63,6 +66,8 @@ inline uint64_t getMonotonicMicros()
     return static_cast<uint64_t>(ticks_to_microsecs(gettime()));
 #elif defined(PS2_PLATFORM)
     return static_cast<uint64_t>(ps2_ee_micros());
+#elif defined(PSP_PLATFORM)
+    return static_cast<uint64_t>(sceKernelGetSystemTimeWide());
 #else
     using namespace std::chrono;
     return static_cast<uint64_t>(duration_cast<microseconds>(steady_clock::now().time_since_epoch()).count());

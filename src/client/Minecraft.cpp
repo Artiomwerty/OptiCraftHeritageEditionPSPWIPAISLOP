@@ -950,6 +950,13 @@ void Minecraft::run()
 
                 long_t l1 = System::nanoTime();
                 const int_t clientTicksThisFrame = timer->elapsedTicks;
+#if PLATFORM_PSP
+                {
+                    static int psTraceFrames = 0;
+                    if (++psTraceFrames <= 6 || psTraceFrames == 60 || psTraceFrames == 200)
+                        PspSystem::bootTrace("loop %d: elapsedTicks=%d ticksRan=%d", psTraceFrames, (int)timer->elapsedTicks, (int)ticksRan);
+                }
+#endif
                 for (int_t j = 0; j < timer->elapsedTicks; j++)
                 {
                     ticksRan++;
@@ -1887,6 +1894,12 @@ void Minecraft::runTick()
         ps2SetMenuPad(isScreenOwnedByPlayer2() ? 1 : 0);
 #endif
         GuiScreen *screenBefore = currentScreen;
+#if PLATFORM_PSP
+        {
+            static int psHi = 0;
+            if (++psHi <= 5 || psHi == 100) PspSystem::bootTrace("handleInput call %d", psHi);
+        }
+#endif
         currentScreen->handleInput();
         if (currentScreen != nullptr && currentScreen == screenBefore)
         {
