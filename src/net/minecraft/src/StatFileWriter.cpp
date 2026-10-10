@@ -88,6 +88,9 @@ void StatFileWriter::loadLocalStats()
 
 void StatFileWriter::saveLocalStats()
 {
+#ifdef PSP_PLATFORM
+	return; // Memory Stick wear protection: stats are not worth a write
+#endif
 	std::vector<LocalStatsFormat::Entry> entries;
 	entries.reserve(writtenStats.size());
 	for (auto &pair : writtenStats)

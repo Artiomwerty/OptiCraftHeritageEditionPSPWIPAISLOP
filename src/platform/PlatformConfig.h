@@ -108,7 +108,7 @@
 #endif
 
 #ifndef PLATFORM_LOCAL_STATS
-#  define PLATFORM_LOCAL_STATS (PLATFORM_PS2 || PLATFORM_WII)
+#  define PLATFORM_LOCAL_STATS (PLATFORM_PS2 || PLATFORM_WII || PLATFORM_PSP)
 #endif
 
 #ifndef PLATFORM_ENUMERATE_SAVE_DIRECTORIES
@@ -339,7 +339,7 @@ declares."
 // geometry; PC keeps the original GL retained path and PS2 uses captured RAM
 // meshes/immediate submission instead.
 #ifndef PLATFORM_PERSISTENT_RENDER_MESH
-#  define PLATFORM_PERSISTENT_RENDER_MESH PLATFORM_WII
+#  define PLATFORM_PERSISTENT_RENDER_MESH (PLATFORM_WII || PLATFORM_PSP)
 #endif
 
 // Model geometry is persistent on more backends than terrain is. PS2 terrain
@@ -361,7 +361,7 @@ declares."
 // where they are aiming. Both console backends feed lwjgl::Mouse from a stick
 // (PS2) or the Wiimote IR pointer (Wii), so the coordinates are already there.
 #ifndef PLATFORM_SOFTWARE_CURSOR
-#  if PLATFORM_PS2 || PLATFORM_WII
+#  if PLATFORM_PS2 || PLATFORM_WII || PLATFORM_PSP
 #    define PLATFORM_SOFTWARE_CURSOR 1
 #  else
 #    define PLATFORM_SOFTWARE_CURSOR 0

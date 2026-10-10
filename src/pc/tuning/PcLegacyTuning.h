@@ -3,13 +3,22 @@
 // Low-end desktop policy used by gcc32-legacy-release. Runtime and world-generation
 // shortcuts are isolated here so the normal PC profile keeps vanilla behavior.
 #define PC_LEGACY_DEFAULT_RENDER_DISTANCE 2
+#ifdef PSP_PLATFORM
+#define PC_LEGACY_VISIBLE_CHUNK_RADIUS 3
+#else
 #define PC_LEGACY_VISIBLE_CHUNK_RADIUS 4
+#endif
 #define PC_LEGACY_VISIBLE_CHUNK_DIAMETER (PC_LEGACY_VISIBLE_CHUNK_RADIUS * 2 + 1)
 #define PC_LEGACY_VERTICAL_CHUNK_COUNT 5
 #define PC_LEGACY_CENTER_VERTICAL_RENDERERS 1
 
+#ifdef PSP_PLATFORM
+#define PC_LEGACY_CHUNK_CACHE_RADIUS 4
+#define PC_LEGACY_CHUNK_UNLOAD_RADIUS 5
+#else
 #define PC_LEGACY_CHUNK_CACHE_RADIUS 5
 #define PC_LEGACY_CHUNK_UNLOAD_RADIUS 6
+#endif
 #define PC_LEGACY_PRELOAD_RADIUS_BLOCKS 80
 
 #define PC_LEGACY_ASYNC_GENERATION_QUEUE_LIMIT 6

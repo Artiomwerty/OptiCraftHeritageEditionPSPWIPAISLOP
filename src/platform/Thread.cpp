@@ -2,6 +2,10 @@
 
 #ifdef WII_PLATFORM
 #include <ogc/lwp.h>
+#elif defined(PSP_PLATFORM)
+#include <pspkernel.h>
+#include <algorithm>
+#include <new>
 #elif defined(PS2_PLATFORM)
 #include <kernel.h>
 #include <malloc.h>
@@ -194,6 +198,61 @@ std::uintptr_t PlatformThread::currentId()
 {
     return static_cast<std::uintptr_t>(GetThreadId());
 }
+
+#elif defined(PSP_PLATFORM)
+// Native PSP threads so the caller's stack size is honoured (pthread's default is too small for
+// world generation) and the worker can sit below the main thread's priority.
+struct PlatformThread::Impl
+{
+    SceUID id = -1;
+};
+namespace
+{
+struct PspThreadStart
+{
+    PlatformThread::Entry entry;
+    void* arg;
+};
+int pspThreadMain(SceSize, void* argp)
+{
+    PspThreadStart start = **static_cast<PspThreadStart**>(argp);
+    delete *static_cast<PspThreadStart**>(argp);
+    start.entry(start.arg);
+    return 0;
+}
+}
+PlatformThread::PlatformThread() : impl_(new (std::nothrow) Impl()) {}
+PlatformThread::~PlatformThread() { if (impl_) { if (joinable() && !isCurrent()) join(); delete impl_; } }
+bool PlatformThread::start(Entry entry, void* argument, std::size_t stackSize, int priority, std::uintptr_t)
+{
+    if (!impl_ || !entry || joinable()) return false;
+    const std::size_t stack = std::max<std::size_t>(stackSize, 256 * 1024);
+    // Main thread runs at 0x20; workers are lower priority (higher number) so they only take the
+    // time the main thread spends waiting for vblank.
+    const int prio = priority <= 32 ? 0x30 : 0x28 + std::min(priority / 8, 16);
+    SceUID id = sceKernelCreateThread("mcworker", pspThreadMain, prio, static_cast<int>(stack), THREAD_ATTR_USER | THREAD_ATTR_VFPU, nullptr);
+    if (id < 0) return false;
+    PspThreadStart* start = new (std::nothrow) PspThreadStart{entry, argument};
+    if (!start) { sceKernelDeleteThread(id); return false; }
+    if (sceKernelStartThread(id, sizeof(start), &start) < 0)
+    {
+        delete start;
+        sceKernelDeleteThread(id);
+        return false;
+    }
+    impl_->id = id;
+    return true;
+}
+void PlatformThread::join()
+{
+    if (!joinable() || isCurrent()) return;
+    sceKernelWaitThreadEnd(impl_->id, nullptr);
+    sceKernelDeleteThread(impl_->id);
+    impl_->id = -1;
+}
+bool PlatformThread::joinable() const { return impl_ && impl_->id >= 0; }
+bool PlatformThread::isCurrent() const { return joinable() && impl_->id == sceKernelGetThreadId(); }
+std::uintptr_t PlatformThread::currentId() { return static_cast<std::uintptr_t>(sceKernelGetThreadId()); }
 
 #else
 struct PlatformThread::Impl { std::thread thread; };

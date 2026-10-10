@@ -23,16 +23,23 @@
 #endif
 
 #include "util/Memory.h"
+#ifdef PSP_PLATFORM
+#include "psp/system/PspSystem.h"
+#endif
 
 static std::string ToPath(const jstring &path)
 {
 	std::string u8path = path;
 
+#ifdef PSP_PLATFORM
+	return u8path; // PSP paths are already absolute device paths (ef0:/..., ms0:/...)
+#else
 	static char buffer[PATH_MAX];
 	if (!::realpath(u8path.c_str(), buffer))
 		return u8path; // File probably doesn't exist yet, just use the path as-is
 	
 	return std::string(buffer);
+#endif
 }
 
 static jstring FromPath(const std::string &path)
@@ -206,6 +213,9 @@ File *File::open(const File &parent, const jstring &child)
 
 File *File::openResourceDirectory()
 {
+#ifdef PSP_PLATFORM
+	return new File_Impl(PspSystem::appDir() + "/assets");
+#else
 	// Get the path to the executable
 	char (*path) = (char*)malloc(PATH_MAX);
 	uint32_t length = PATH_MAX;
@@ -235,6 +245,7 @@ File *File::openResourceDirectory()
 	File* file = new File_Impl(u16str.substr(0, pos) + "/assets");
 	free(path);
 	return file;
+#endif
 }
 
 File *File::openWorkingDirectory(const jstring &name)

@@ -245,7 +245,13 @@
 #  define PLATFORM_READ_ONLY_MIN_UNUSED_TICKS_BEFORE_UNLOAD PLATFORM_MIN_UNUSED_TICKS_BEFORE_UNLOAD
 #  define PLATFORM_PRELOAD_RADIUS_BLOCKS                (PLATFORM_PC_LEGACY ? PC_LEGACY_PRELOAD_RADIUS_BLOCKS : 128)
 #  define PLATFORM_PLAYER_UPDATE_CHUNK_RANGE_BLOCKS     32
-#  define PLATFORM_DISABLE_RUNTIME_AUTOSAVE             0
+#  ifdef PSP_PLATFORM
+// Memory Stick wear protection: the PSP never autosaves; the world is written only when the
+// player quits or pauses to the title.
+#    define PLATFORM_DISABLE_RUNTIME_AUTOSAVE           1
+#  else
+#    define PLATFORM_DISABLE_RUNTIME_AUTOSAVE           0
+#  endif
 #  define PLATFORM_RUNTIME_AUTOSAVE_LEVEL_DATA          1
 #  define PLATFORM_SKIP_NEW_WORLD_FULL_SAVE             0
 // Vanilla Beta 1.7.3: World::autosavePeriod, in world ticks. 40 ticks is two

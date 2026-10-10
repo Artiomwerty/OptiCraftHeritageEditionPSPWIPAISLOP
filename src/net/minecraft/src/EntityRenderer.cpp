@@ -489,6 +489,10 @@ void EntityRenderer::updateLightmap()
                                                (static_cast<uint_t>(g) << 8) | static_cast<uint_t>(b));
     }
 
+#if defined(PSP_PLATFORM)
+    renderSetLightmapColors(reinterpret_cast<const std::uint32_t*>(lightmapColors.data()),
+                            static_cast<int>(lightmapColors.size()));
+#endif
 #if defined(PS2_PLATFORM)
     renderSetLightmapColors(reinterpret_cast<const std::uint32_t*>(lightmapColors.data()),
                             static_cast<int>(lightmapColors.size()));

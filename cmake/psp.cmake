@@ -51,8 +51,37 @@ elseif(PSP_APP STREQUAL "DATACHECK")
     set(PSP_TITLE "OptiCraft Data Check")
     set(PSP_INSTALL_TXT "${CMAKE_SOURCE_DIR}/src/psp/INSTALL_DATACHECK.txt")
 elseif(PSP_APP STREQUAL "GAME")
-    message(FATAL_ERROR "The full PSP game backend is not buildable yet (see PSP_PORT.md). "
-                        "Use the psp-bringup or psp-datacheck preset.")
+    # The PSP game runs the engine's desktop ("PC legacy") code path -- the one built for weak 32-bit
+    # machines -- with the SDL/OpenGL layers replaced by PSP ones: a sceGu renderer
+    # (src/platform/RenderAPI_GU_PSP.cpp), sceCtrl input and sceAudio sound. So the source
+    # list is the common code plus the src/pc legacy render/world files, minus anything that
+    # talks to SDL, OpenGL or Direct3D directly.
+    mcbeta_collect_platform_sources(PSP_SOURCES pc)
+    mcbeta_collect_platform_sources(_psp_tree psp)
+    list(APPEND PSP_SOURCES ${_psp_tree})
+    list(REMOVE_DUPLICATES PSP_SOURCES)
+    mcbeta_exclude_sources(PSP_SOURCES
+        "[/\\\\]pc[/\\\\](Main|CrashHandler)\\.cpp$"
+        "[/\\\\]pc[/\\\\](win32|audio|external|lwjgl)[/\\\\]"
+        "[/\\\\]pc[/\\\\]render[/\\\\](d3d9[/\\\\]|PcOpenGlRenderBackend)"
+        "[/\\\\]platform[/\\\\]RenderAPI_PC\\.cpp$"
+        "[/\\\\]psp[/\\\\]tools[/\\\\]"
+        "[/\\\\]psp[/\\\\]compat[/\\\\]"
+        "[/\\\\]java[/\\\\]JavaNetwork\\.cpp$"
+        "[/\\\\]platform[/\\\\]audio[/\\\\]SoundManager_PC\\.cpp$")
+    mcbeta_exclude_remote_stats_sources(PSP_SOURCES)
+    mcbeta_select_platform_backends(PSP_SOURCES PSP GU_PSP PSP)
+    list(APPEND PSP_SOURCES
+        "${CMAKE_SOURCE_DIR}/external/zlib/contrib/minizip/ioapi.c"
+        "${CMAKE_SOURCE_DIR}/external/zlib/contrib/minizip/unzip.c")
+    set_source_files_properties(
+        "${CMAKE_SOURCE_DIR}/external/zlib/contrib/minizip/ioapi.c"
+        "${CMAKE_SOURCE_DIR}/external/zlib/contrib/minizip/unzip.c"
+        PROPERTIES COMPILE_DEFINITIONS USE_FILE32API)
+    list(APPEND PSP_LIBS pspgu pspgum pspvram pspaudio psputility pspnet_inet pspnet pspuser z)
+    set(PSP_GAME_DEFS PC_LEGACY_BUILD=1 NO_NETWORK PLATFORM_BOUNDED_WORLD=1 PLATFORM_CONSOLE_LOW=1)
+    set(PSP_TITLE "OptiCraft")
+    set(PSP_INSTALL_TXT "${CMAKE_SOURCE_DIR}/src/psp/INSTALL_GAME.txt")
 else()
     message(FATAL_ERROR "PSP_APP must be BRINGUP, DATACHECK or GAME (got '${PSP_APP}')")
 endif()
@@ -67,12 +96,16 @@ set_target_properties(OptiCraft PROPERTIES
 )
 target_compile_features(OptiCraft PRIVATE cxx_std_17)
 target_compile_options(OptiCraft PRIVATE -Wall -O2 -fno-math-errno -fno-trapping-math)
-target_compile_definitions(OptiCraft PRIVATE PSP_PLATFORM MC_LOG_LEVEL=${MC_LOG_LEVEL})
+target_compile_definitions(OptiCraft PRIVATE PSP_PLATFORM MC_LOG_LEVEL=${MC_LOG_LEVEL} ${PSP_GAME_DEFS})
 target_include_directories(OptiCraft PRIVATE
+    "${CMAKE_SOURCE_DIR}/src/psp/compat"
     "${CMAKE_SOURCE_DIR}/src"
     "${CMAKE_SOURCE_DIR}/src/pc"
     "${CMAKE_SOURCE_DIR}/src/psp"
+    "${CMAKE_SOURCE_DIR}/src/net/minecraft/src"
+    "${CMAKE_SOURCE_DIR}/src/mods"
     "${CMAKE_SOURCE_DIR}/external/stb"
+    "${CMAKE_SOURCE_DIR}/external/zlib/contrib/minizip"
 )
 
 # Static-library link order: dependents first.

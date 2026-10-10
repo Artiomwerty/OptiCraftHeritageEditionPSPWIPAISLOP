@@ -1,0 +1,27 @@
+OptiCraft for PSP  (PSP-2000 and later only: 64 MB RAM)
+=======================================================
+
+INSTALL
+  1. Plug your PSP into the PC (USB) or put the Memory Stick in a reader.
+  2. Open the zip and copy the folder  PSP  into the root of the Memory Stick /
+     internal storage (PSP Go: "ef0:"). Say yes if it asks to merge folders.
+  3. On the PSP: Game > Memory Stick > OptiCraft.
+
+CONTROLS (in the world)
+  Nub              move                Face buttons  look (Triangle up, Cross down,
+  R                break (hold)                      Square left, Circle right)
+  L                place / use         D-pad L/R     previous / next hotbar slot
+  L + R            toggle sprint       D-pad up      jump (double-tap = fly, creative)
+  D-pad down       toggle sneak        Select        inventory
+  Start            pause
+
+CONTROLS (menus)
+  Nub / D-pad      move the cursor     Cross         click
+  Square           right click         Circle/Start  back
+
+SAVING (protects your Memory Stick)
+  The game NEVER autosaves and never writes while you play. Your world is saved
+  only when you pick "Save and quit to title" from the pause menu. If you press
+  HOME and exit, the session is not saved. No swap file, no logging.
+
+Needs assets.pak next to EBOOT.PBP (already included in this zip).
