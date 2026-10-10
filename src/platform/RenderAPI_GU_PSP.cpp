@@ -1354,3 +1354,6 @@ bool renderReadPixelsRgb(int, int, int, int, void *) { return false; }
 bool renderCopyFramebufferToBoundTexture(int, int, int, int) { return false; }
 
 void renderSetLegacyPresentationGamma(bool) {}
+
+// Lets code that talks to sceGu directly (the debug heartbeat) force a full state re-send.
+void pspRenderInvalidateState() { resetApplied(); }

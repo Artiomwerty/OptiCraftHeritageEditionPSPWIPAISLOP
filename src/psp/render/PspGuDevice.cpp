@@ -50,6 +50,15 @@ bool init()
     sceGuFrontFace(GU_CW);
     sceGuShadeModel(GU_SMOOTH);
     sceGuDisable(GU_DEPTH_TEST);
+    sceGuEnable(GU_CLIP_PLANES);
+    {
+        // World/view matrices are not guaranteed to start as identity; the renderer only ever sets
+        // the "model" and projection ones, so pin the others.
+        ScePspFMatrix4 id = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};
+        sceGuSetMatrix(GU_VIEW, &id);
+        sceGuSetMatrix(GU_MODEL, &id);
+        sceGuSetMatrix(GU_PROJECTION, &id);
+    }
     sceGuClearColor(0xFF000000);
     sceGuClearDepth(0);
     sceGuClear(GU_COLOR_BUFFER_BIT | GU_DEPTH_BUFFER_BIT);

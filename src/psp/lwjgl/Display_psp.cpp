@@ -3,11 +3,14 @@
 
 #include "lwjgl/Display.h"
 
+#include <pspgu.h>
 #include "client/Minecraft.h"
 #include "net/minecraft/src/GuiScreen.h"
 #include "psp/input/PspInput.h"
 #include "psp/render/PspGuDevice.h"
 #include "psp/system/PspSystem.h"
+
+void pspRenderInvalidateState();
 
 namespace lwjgl
 {
@@ -44,7 +47,30 @@ void processMessages()
 	PspInput::poll(inMenu);
 }
 
-void swapBuffers() { PspGu::present(); }
+// Debug heartbeat: a small square in the top-left corner, drawn straight with sceGu in screen
+// space. It changes colour every 15 frames, so a black screen can be told apart from a hang:
+// if it blinks, the display and GE work and the problem is in what the game draws.
+static void heartbeat()
+{
+	struct V { unsigned color; short x, y, z; };
+	static unsigned frame = 0;
+	++frame;
+	if (frame > 1800) return; // first minute only
+	V *v = static_cast<V *>(sceGuGetMemory(2 * sizeof(V)));
+	const unsigned color = ((frame / 15) & 1) ? 0xFF00FF00u : 0xFF0000FFu; // green / red (ABGR)
+	v[0] = {color, 4, 4, 0};
+	v[1] = {color, 28, 28, 0};
+	sceGuDisable(GU_TEXTURE_2D);
+	sceGuDisable(GU_BLEND);
+	sceGuDisable(GU_DEPTH_TEST);
+	sceGuDisable(GU_ALPHA_TEST);
+	sceGuDisable(GU_SCISSOR_TEST);
+	sceGuDrawArray(GU_SPRITES, GU_COLOR_8888 | GU_VERTEX_16BIT | GU_TRANSFORM_2D, 2, nullptr, v);
+	sceGuEnable(GU_SCISSOR_TEST);
+	pspRenderInvalidateState();
+}
+
+void swapBuffers() { heartbeat(); PspGu::present(); }
 
 void update(bool doProcessMessages)
 {
