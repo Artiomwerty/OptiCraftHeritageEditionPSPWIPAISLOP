@@ -2,6 +2,8 @@
 
 #include <pspkernel.h>
 #include <psprtc.h>
+#include <cstdarg>
+#include <cstdio>
 
 namespace
 {
@@ -24,6 +26,25 @@ const std::string &appDir() { return g_appDir; }
 
 uint64_t micros() { return static_cast<uint64_t>(sceKernelGetSystemTimeWide()); }
 uint32_t millis() { return static_cast<uint32_t>(micros() / 1000u); }
+
+void bootTrace(const char *fmt, ...)
+{
+    static int lines = 0;
+    if (lines >= 120)
+        return;
+    ++lines;
+    char msg[256];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(msg, sizeof(msg), fmt, ap);
+    va_end(ap);
+    std::string path = g_appDir + "/boot.log";
+    FILE *f = fopen(path.c_str(), lines == 1 ? "w" : "a");
+    if (!f)
+        return;
+    fprintf(f, "%8u ms  %s", (unsigned)millis(), msg);
+    fclose(f);
+}
 
 void exitGame() { sceKernelExitGame(); }
 }

@@ -218,7 +218,12 @@ namespace
 
 // Client boot breadcrumbs use one neutral category. Platform log sinks decide
 // whether to mirror them to a persistent boot log.
+#ifdef PSP_PLATFORM
+#include "psp/system/PspSystem.h"
+#define PLATFORM_BOOT_LOG(...) PspSystem::bootTrace(__VA_ARGS__)
+#else
 #define PLATFORM_BOOT_LOG(...) MC_LOG_INFO("client.boot", __VA_ARGS__)
+#endif
 #define PLATFORM_BOOT_PREFIX "[CLIENT]"
 #include "net/minecraft/src/WorldProvider.h"
 #include "net/minecraft/src/WorldRenderer.h"

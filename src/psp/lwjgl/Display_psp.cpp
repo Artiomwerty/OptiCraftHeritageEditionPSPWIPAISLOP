@@ -7,6 +7,7 @@
 #include "net/minecraft/src/GuiScreen.h"
 #include "psp/input/PspInput.h"
 #include "psp/render/PspGuDevice.h"
+#include "psp/system/PspSystem.h"
 
 namespace lwjgl
 {
@@ -15,8 +16,10 @@ namespace Display
 
 void create()
 {
+	PspSystem::bootTrace("Display::create\n");
 	PspGu::init();
 	PspInput::init();
+	PspSystem::bootTrace("Display::create done\n");
 }
 
 void setDisplayMode(const DisplayMode &) {}

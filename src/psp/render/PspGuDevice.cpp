@@ -7,6 +7,7 @@
 #include <psputils.h>
 
 #include "psp/PspFramePacer.h"
+#include "psp/system/PspSystem.h"
 
 namespace
 {
@@ -82,6 +83,10 @@ void present()
     sceGuSwapBuffers();
 
     ++g_stats.frames;
+    if (g_stats.frames == 1 || g_stats.frames == 2 || g_stats.frames == 10 || g_stats.frames == 100 ||
+        g_stats.frames == 1000)
+        PspSystem::bootTrace("present: frame %u (draws %u, verts %u, slow %u)\n", g_stats.frames,
+                             g_stats.lastDrawCalls, g_stats.lastVertices, g_stats.slowFrames);
     g_stats.slowFrames = g_pacer.slowFrames();
     g_stats.slowInARow = g_pacer.slowFramesInARow();
     if (g_arenaUsed > g_stats.arenaPeakBytes)

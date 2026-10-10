@@ -13,6 +13,10 @@ const std::string &appDir();
 uint32_t millis();
 uint64_t micros();
 
+// Boot breadcrumbs: appends one line to <appDir>/boot.log, at most 120 lines per run, so a hang or
+// black screen can be located. Tiny (a few KB per run); never used while playing.
+void bootTrace(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+
 // Leaves to the XMB. Safe to call from any thread.
 void exitGame();
 }
