@@ -96,7 +96,7 @@
 // probe alone is ~520 optional files x several spellings of failed opens on
 // every RenderEngine (re)load -- a FAT directory walk each over USB/SD.
 #ifndef PLATFORM_OPTIFINE_CUSTOM_ANIMATIONS
-#  define PLATFORM_OPTIFINE_CUSTOM_ANIMATIONS (!(PLATFORM_PS2 || PLATFORM_WII))
+#  define PLATFORM_OPTIFINE_CUSTOM_ANIMATIONS (!(PLATFORM_PS2 || PLATFORM_WII || PLATFORM_PSP))
 #endif
 
 #ifndef PLATFORM_OPTIFINE_RANDOM_MOBS

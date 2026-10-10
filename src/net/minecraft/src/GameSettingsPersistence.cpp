@@ -351,6 +351,12 @@ void GameSettings::loadOptions()
 		}
 	}
 
+#if defined(PSP_PLATFORM)
+	// PSP always starts with the standard (non-legacy) UI; a legacy flag saved by an earlier test
+	// build must not trap the player in the console-style screens.
+	legacyUI = false;
+	legacyLook = false;
+#endif
 	legacyGuiScaleRestore = legacyUiRestoreScaleAfterLoad(
 		legacyUI, guiScale, loadedLegacyGuiScaleRestore, legacyGuiScaleRestore);
 	guiScale = legacyUiEffectiveGuiScale(legacyUI, legacyGuiScaleRestore);
