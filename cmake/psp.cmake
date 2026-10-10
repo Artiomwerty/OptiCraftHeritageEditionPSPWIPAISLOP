@@ -118,6 +118,9 @@ add_custom_command(TARGET OptiCraft POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:OptiCraft>" "${CMAKE_SOURCE_DIR}/bin/psp/OptiCraft.unstripped.elf"
     VERBATIM)
 target_link_options(OptiCraft PRIVATE "-Wl,-Map,${CMAKE_SOURCE_DIR}/bin/psp/OptiCraft.map")
+if(PSP_APP STREQUAL "GAME")
+    target_link_options(OptiCraft PRIVATE "-Wl,--wrap=pthread_create")
+endif()
 
 # MEMSIZE=1 asks the firmware for all RAM (64 MB on PSP-2000+). Without it,
 # homebrew gets only ~24 MB even on a 64 MB console.

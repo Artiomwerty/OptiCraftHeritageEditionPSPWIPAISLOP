@@ -9,9 +9,13 @@
 ThreadedFileIOBase ThreadedFileIOBase::threadedIOInstance;
 
 ThreadedFileIOBase::ThreadedFileIOBase() :
-	activeTask(nullptr), writeQueuedCounter(0), savedIOCounter(0), isThreadWaiting(false), stopping(false),
-	worker(&ThreadedFileIOBase::run, this)
+	activeTask(nullptr), writeQueuedCounter(0), savedIOCounter(0), isThreadWaiting(false), stopping(false)
 {
+#ifndef PSP_PLATFORM
+	// PSP: this object is constructed before main(), before the pthread runtime is up, so the worker
+	// is started on the first queued write instead (see queueIO).
+	worker = std::thread(&ThreadedFileIOBase::run, this);
+#endif
 }
 
 ThreadedFileIOBase::~ThreadedFileIOBase()
@@ -117,6 +121,10 @@ void ThreadedFileIOBase::queueIO(IThreadedFileIO *task)
 		}
 		++writeQueuedCounter;
 		threadedIOQueue.push_back(task);
+#ifdef PSP_PLATFORM
+		if (!worker.joinable())
+			worker = std::thread(&ThreadedFileIOBase::run, this);
+#endif
 	}
 	queueCondition.notify_one();
 }
