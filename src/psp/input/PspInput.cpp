@@ -102,6 +102,13 @@ void init()
 
 bool exitRequested() { return g_exit; }
 
+bool menuCursor(int &x, int &y)
+{
+	x = g_cx;
+	y = g_cy;
+	return g_wasMenu;
+}
+
 void poll(bool inMenu)
 {
 	SceCtrlData pad;
@@ -134,25 +141,42 @@ void poll(bool inMenu)
 		}
 		g_wasMenu = true;
 
+		// Cursor: nub only. D-pad + Cross drive the menu like a keyboard (up/down/left/right/Enter),
+		// which is the most comfortable way to use it on a PSP; R / L click with the cursor.
 		const float dz = g_cfg.deadzone;
-		float mx = PspControls::axis(raw.lx, dz) * 9.0f;
-		float my = PspControls::axis(raw.ly, dz) * 9.0f;
-		if (raw.buttons & PspControls::BTN_LEFT) mx -= 5.0f;
-		if (raw.buttons & PspControls::BTN_RIGHT) mx += 5.0f;
-		if (raw.buttons & PspControls::BTN_UP) my -= 5.0f;
-		if (raw.buttons & PspControls::BTN_DOWN) my += 5.0f;
+		const float mx = PspControls::axis(raw.lx, dz) * 9.0f;
+		const float my = PspControls::axis(raw.ly, dz) * 9.0f;
 		const int ox = g_cx, oy = g_cy;
 		g_cx = (int)clampf((float)g_cx + mx, 0.f, (float)(PspGu::kScreenWidth - 1));
 		g_cy = (int)clampf((float)g_cy + my, 0.f, (float)(PspGu::kScreenHeight - 1));
 		if (g_cx != ox || g_cy != oy)
 			lwjgl::Mouse::detail::pushMotion(g_cx, g_cy, g_cx - ox, g_cy - oy);
 
-		mouseBtn(g_h.menuL, (raw.buttons & PspControls::BTN_CROSS) != 0, 0);
-		mouseBtn(g_h.menuR, (raw.buttons & PspControls::BTN_SQUARE) != 0, 1);
-		if (pressed & (PspControls::BTN_CIRCLE | PspControls::BTN_START))
-			pulse(lwjgl::Keyboard::KEY_ESCAPE);
-		if (pressed & PspControls::BTN_L) lwjgl::Mouse::detail::pushWheel(1, g_cx, g_cy);
-		if (pressed & PspControls::BTN_R) lwjgl::Mouse::detail::pushWheel(-1, g_cx, g_cy);
+		// D-pad keys with auto-repeat (first repeat after ~12 frames, then every 4).
+		static unsigned heldFrames = 0;
+		static unsigned lastDir = 0;
+		const unsigned dirMask = raw.buttons & (PspControls::BTN_UP | PspControls::BTN_DOWN |
+		                                        PspControls::BTN_LEFT | PspControls::BTN_RIGHT);
+		bool fire = (pressed & dirMask) != 0;
+		if (dirMask != 0 && dirMask == lastDir)
+		{
+			++heldFrames;
+			if (heldFrames >= 12 && ((heldFrames - 12) % 4) == 0) fire = true;
+		}
+		else
+			heldFrames = 0;
+		lastDir = dirMask;
+		if (fire)
+		{
+			if (dirMask & PspControls::BTN_UP) pulse(lwjgl::Keyboard::KEY_UP);
+			if (dirMask & PspControls::BTN_DOWN) pulse(lwjgl::Keyboard::KEY_DOWN);
+			if (dirMask & PspControls::BTN_LEFT) pulse(lwjgl::Keyboard::KEY_LEFT);
+			if (dirMask & PspControls::BTN_RIGHT) pulse(lwjgl::Keyboard::KEY_RIGHT);
+		}
+		if (pressed & PspControls::BTN_CROSS) pulse(lwjgl::Keyboard::KEY_RETURN);
+		if (pressed & (PspControls::BTN_CIRCLE | PspControls::BTN_START)) pulse(lwjgl::Keyboard::KEY_ESCAPE);
+		mouseBtn(g_h.menuL, (raw.buttons & PspControls::BTN_R) != 0, 0);
+		mouseBtn(g_h.menuR, (raw.buttons & PspControls::BTN_L) != 0, 1);
 		return;
 	}
 

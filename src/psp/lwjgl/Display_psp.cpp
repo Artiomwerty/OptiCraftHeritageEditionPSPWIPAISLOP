@@ -70,7 +70,31 @@ static void heartbeat()
 	pspRenderInvalidateState();
 }
 
-void swapBuffers() { heartbeat(); PspGu::present(); }
+// Always-visible menu cursor (white cross with a dark outline), independent of the game's own.
+static void menuCursor()
+{
+	int cx = 0, cy = 0;
+	if (!PspInput::menuCursor(cx, cy)) return;
+	struct V { unsigned color; short x, y, z; };
+	V *v = static_cast<V *>(sceGuGetMemory(8 * sizeof(V)));
+	const short x = static_cast<short>(cx), y = static_cast<short>(cy);
+	const unsigned dark = 0xFF000000u, light = 0xFFFFFFFFu;
+	// horizontal bar, vertical bar: dark (bigger) then light (smaller)
+	v[0] = {dark, short(x - 7), short(y - 2), 0}; v[1] = {dark, short(x + 8), short(y + 3), 0};
+	v[2] = {dark, short(x - 2), short(y - 7), 0}; v[3] = {dark, short(x + 3), short(y + 8), 0};
+	v[4] = {light, short(x - 6), short(y - 1), 0}; v[5] = {light, short(x + 7), short(y + 2), 0};
+	v[6] = {light, short(x - 1), short(y - 6), 0}; v[7] = {light, short(x + 2), short(y + 7), 0};
+	sceGuDisable(GU_TEXTURE_2D);
+	sceGuDisable(GU_BLEND);
+	sceGuDisable(GU_DEPTH_TEST);
+	sceGuDisable(GU_ALPHA_TEST);
+	sceGuDisable(GU_SCISSOR_TEST);
+	sceGuDrawArray(GU_SPRITES, GU_COLOR_8888 | GU_VERTEX_16BIT | GU_TRANSFORM_2D, 8, nullptr, v);
+	sceGuEnable(GU_SCISSOR_TEST);
+	pspRenderInvalidateState();
+}
+
+void swapBuffers() { heartbeat(); menuCursor(); PspGu::present(); }
 
 void update(bool doProcessMessages)
 {

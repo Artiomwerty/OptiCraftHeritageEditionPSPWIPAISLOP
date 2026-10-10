@@ -320,7 +320,7 @@ declares."
 // This is deliberately NOT tied to PLATFORM_CONSOLE_LOW: it is a backend
 // capability question, not a performance budget.
 #ifndef PLATFORM_FONT_IMMEDIATE
-#  if PLATFORM_PS2 || PLATFORM_WII
+#  if PLATFORM_PS2 || PLATFORM_WII || PLATFORM_PSP
 #    define PLATFORM_FONT_IMMEDIATE 1
 #  else
 #    define PLATFORM_FONT_IMMEDIATE 0
