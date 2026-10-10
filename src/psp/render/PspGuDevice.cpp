@@ -82,8 +82,26 @@ void present()
 
     // Make the CPU-written vertex data visible to the GE, then run the frame.
     sceKernelDcacheWritebackRange(g_arena[g_arenaIndex], g_arenaUsed);
+    // Frame profile for boot.log: how long the CPU took to build the frame vs how long the GE
+    // then needed to draw it (the two are not overlapped yet).
+    static std::uint64_t lastEnd = 0, geSum = 0, frameSum = 0;
+    static unsigned profFrames = 0, profLines = 0;
+    const std::uint64_t t0 = PspSystem::micros();
     sceGuFinish();
     sceGuSync(0, 0);
+    const std::uint64_t t1 = PspSystem::micros();
+    geSum += t1 - t0;
+    if (lastEnd) frameSum += t1 - lastEnd;
+    lastEnd = t1;
+    if (++profFrames == 120)
+    {
+        if (profLines++ < 14)
+            PspSystem::bootTrace("perf: %u us/frame (%.1f fps), GE %u us, CPU %u us, draws %u verts %u",
+                                 (unsigned)(frameSum / 119), 119.0e6 / (double)(frameSum ? frameSum : 1),
+                                 (unsigned)(geSum / 120), (unsigned)((frameSum / 119) - (geSum / 120)),
+                                 g_stats.drawCalls, g_stats.vertices);
+        profFrames = 0; geSum = 0; frameSum = 0;
+    }
 
     unsigned waits = g_pacer.waitsNeeded(sceDisplayGetVcount());
     while (waits--)

@@ -506,7 +506,7 @@ void applyTexture()
             sceGuTexImage(l, t->tw >> l, t->th >> l, t->tw >> l, src + mipOffset(*t, l));
         if (t->levels > 1)
         {
-            sceGuTexLevelMode(GU_TEXTURE_AUTO, 0.0f);
+            sceGuTexLevelMode(GU_TEXTURE_AUTO, -1.0f); // negative bias: prefer the sharper level
             sceGuTexFilter(t->blur ? GU_LINEAR_MIPMAP_LINEAR : GU_NEAREST_MIPMAP_NEAREST,
                            t->blur ? GU_LINEAR : GU_NEAREST);
         }
