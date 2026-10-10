@@ -511,7 +511,10 @@ void applyState(bool meshLit)
     applyToggle(g_a.blend, g_s.blend, GU_BLEND);
     applyToggle(g_a.alphaTest, g_s.alphaTest, GU_ALPHA_TEST);
     applyToggle(g_a.depthTest, g_s.depthTest, GU_DEPTH_TEST);
-    applyToggle(g_a.cull, g_s.cull, GU_CULL_FACE);
+    // Face culling stays off on the GE for now: the title log showed every GUI quad (cull enabled by
+    // the game, with a y-flipped ortho projection) being rejected, so the front-face mapping needs a
+    // calibration pass first. Depth testing keeps the picture correct meanwhile.
+    applyToggle(g_a.cull, false, GU_CULL_FACE);
 
     const unsigned bkey = (static_cast<unsigned>(g_s.blendSrc) << 8) | static_cast<unsigned>(g_s.blendDst);
     if (bkey != g_a.blendKey)
