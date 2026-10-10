@@ -30,7 +30,7 @@ uint32_t millis() { return static_cast<uint32_t>(micros() / 1000u); }
 void bootTrace(const char *fmt, ...)
 {
     static int lines = 0;
-    if (lines >= 120)
+    if (lines >= 260)
         return;
     ++lines;
     char msg[256];

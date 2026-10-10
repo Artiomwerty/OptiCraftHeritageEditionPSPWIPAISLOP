@@ -32,6 +32,7 @@
 #include "psp/render/PspGuDevice.h"
 #include "psp/render/PspRenderMath.h"
 #include "psp/render/PspVertexPack.h"
+#include "psp/system/PspSystem.h"
 
 using PspMath::Mat4;
 
@@ -566,9 +567,34 @@ void applyState(bool meshLit)
     uploadMatrices();
 }
 
+// Diagnostic: describes the first few draws after the title screen is up (boot.log).
+void traceDraw(const PackedGeom &g)
+{
+    static int traced = 0;
+    if (traced >= 36 || PspGu::stats().frames < 4) return;
+    {
+        const Mat4 &p0 = g_stacks[SlotProjection].cur();
+        if (p0.m[11] != 0.0f) return; // only orthographic (GUI) draws are interesting
+    }
+    ++traced;
+    const float *f = static_cast<const float *>(g.verts);
+    const Texture *t = boundTex();
+    const Mat4 &pr = g_stacks[SlotProjection].cur();
+    const Mat4 &mv = g_stacks[SlotModelView].cur();
+    PspSystem::bootTrace("draw#%d prim=%d n=%d lit=%d tex2d=%d bound=%d(%dx%d%s) blend=%d(%d,%d) at=%d dt=%d dm=%d cull=%d\n",
+        traced, static_cast<int>(g.prim), g.vertexCount, g.lit, g.lit ? 0 : g_s.tex2d, g_boundTexture,
+        t ? t->w : 0, t ? t->h : 0, (t && t->created) ? "" : ",NOT CREATED", g_s.blend,
+        static_cast<int>(g_s.blendSrc), static_cast<int>(g_s.blendDst), g_s.alphaTest, g_s.depthTest,
+        g_s.depthMask, g_s.cull);
+    PspSystem::bootTrace("   v0 uv=%.3f,%.3f col=%08x xyz=%.1f,%.1f,%.1f  proj[0,5,10,12,13,14]=%.4f %.4f %.4f %.1f %.1f %.1f  mv[12,13,14]=%.1f %.1f %.1f\n",
+        f[0], f[1], *reinterpret_cast<const unsigned *>(f + 2), f[3], f[4], f[5],
+        pr.m[0], pr.m[5], pr.m[10], pr.m[12], pr.m[13], pr.m[14], mv.m[12], mv.m[13], mv.m[14]);
+}
+
 void submit(const PackedGeom &g)
 {
     if (!g.verts || g.vertexCount <= 0) return;
+    traceDraw(g);
     applyState(g.lit);
     const int vtype = GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D | (g.lit ? GU_NORMAL_8BIT : 0);
     const std::size_t vsize = PspPack::vertexBytes(g.lit);
