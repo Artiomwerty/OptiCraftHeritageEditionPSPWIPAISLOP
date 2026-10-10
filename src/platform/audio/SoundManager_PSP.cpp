@@ -365,6 +365,10 @@ void SoundManager::tryToSetLibraryAndCodecs()
         loaded = true;
         return;
     }
+#ifdef PSP_NO_AUDIO
+    PspSystem::bootTrace("audio: disabled in this build");
+    return;
+#endif
     SceUID th = sceKernelCreateThread("audio", mixerThread, 0x18, 16 * 1024, THREAD_ATTR_USER, nullptr);
     if (th >= 0 && sceKernelStartThread(th, 0, nullptr) >= 0)
     {

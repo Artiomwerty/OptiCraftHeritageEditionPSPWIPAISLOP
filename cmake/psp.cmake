@@ -98,6 +98,9 @@ set_target_properties(OptiCraft PROPERTIES
 target_compile_features(OptiCraft PRIVATE cxx_std_17)
 target_compile_options(OptiCraft PRIVATE -Wall -O3 -ffast-math -fno-math-errno -fno-trapping-math -fomit-frame-pointer -fno-stack-protector)
 target_compile_definitions(OptiCraft PRIVATE PSP_PLATFORM MC_LOG_LEVEL=${MC_LOG_LEVEL} ${PSP_GAME_DEFS})
+if(PSP_NO_AUDIO)
+    target_compile_definitions(OptiCraft PRIVATE PSP_NO_AUDIO)
+endif()
 target_include_directories(OptiCraft PRIVATE
     "${CMAKE_SOURCE_DIR}/src/psp/compat"
     "${CMAKE_SOURCE_DIR}/src"
