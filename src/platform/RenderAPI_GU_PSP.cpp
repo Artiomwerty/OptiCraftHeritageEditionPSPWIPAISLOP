@@ -176,7 +176,19 @@ struct Texture
     bool blur = false, clamp = false;
     int vramOffset = -1;
     int epoch = 0;
+    int levels = 1;                 // mip levels stored (tile atlases get a chain, see mipOffset)
+    std::size_t totalBytes = 0;     // all levels
 };
+
+constexpr int kAtlasMipLevels = 4;  // 256x256 atlas: 16px tiles down to 2px
+
+inline std::size_t mipOffset(const Texture &t, int level)
+{
+    std::size_t off = 0;
+    for (int l = 0; l < level; ++l)
+        off += static_cast<std::size_t>(t.tw >> l) * static_cast<std::size_t>(t.th >> l) * 4;
+    return off;
+}
 
 std::vector<Texture> g_textures(1); // index 0 unused
 std::vector<int> g_freeTextureNames;
@@ -216,7 +228,7 @@ int vramTake(std::size_t bytes)
 void releaseTextureStorage(Texture &t)
 {
     if (t.vramOffset >= 0)
-        g_vramFree.push_back({t.vramOffset, static_cast<std::size_t>(t.tw) * t.th * 4});
+        g_vramFree.push_back({t.vramOffset, t.totalBytes});
     t.vramOffset = -1;
     free(t.pixels);
     t.pixels = nullptr;
@@ -231,6 +243,51 @@ void mirrorToVram(Texture &t, int y0, int rows)
     std::memcpy(dst + rowBytes * static_cast<std::size_t>(y0),
                 reinterpret_cast<unsigned char *>(t.pixels) + rowBytes * static_cast<std::size_t>(y0),
                 rowBytes * static_cast<std::size_t>(rows));
+}
+
+// Rebuilds the mip chain for the level-0 rectangle (x,y,w,h) with an alpha-weighted box filter
+// (transparent texels must not darken the fringes of leaves/glass), and pushes the touched rows of
+// every level to VRAM / out of the data cache.
+void rebuildMips(Texture &t, int x, int y, int w, int h)
+{
+    if (t.levels <= 1 || !t.pixels) return;
+    unsigned char *base = reinterpret_cast<unsigned char *>(t.pixels);
+    int x0 = x, y0 = y, x1 = x + w, y1 = y + h; // region in level-(l-1) texels
+    for (int l = 1; l < t.levels; ++l)
+    {
+        const int pw = t.tw >> (l - 1), cw = t.tw >> l, ch = t.th >> l;
+        x0 >>= 1; y0 >>= 1; x1 = (x1 + 1) >> 1; y1 = (y1 + 1) >> 1;
+        if (x1 > cw) x1 = cw;
+        if (y1 > ch) y1 = ch;
+        const unsigned char *src = base + mipOffset(t, l - 1);
+        unsigned char *dst = base + mipOffset(t, l);
+        for (int cy = y0; cy < y1; ++cy)
+            for (int cx = x0; cx < x1; ++cx)
+            {
+                const unsigned char *p0 = src + (static_cast<std::size_t>(cy * 2) * pw + cx * 2) * 4;
+                const unsigned char *p1 = p0 + 4;
+                const unsigned char *p2 = p0 + static_cast<std::size_t>(pw) * 4;
+                const unsigned char *p3 = p2 + 4;
+                const unsigned a0 = p0[3], a1 = p1[3], a2 = p2[3], a3 = p3[3];
+                const unsigned asum = a0 + a1 + a2 + a3;
+                unsigned char *o = dst + (static_cast<std::size_t>(cy) * cw + cx) * 4;
+                for (int c = 0; c < 3; ++c)
+                {
+                    o[c] = asum ? static_cast<unsigned char>((p0[c] * a0 + p1[c] * a1 + p2[c] * a2 + p3[c] * a3) / asum)
+                                : static_cast<unsigned char>((p0[c] + p1[c] + p2[c] + p3[c]) / 4);
+                }
+                o[3] = static_cast<unsigned char>(asum / 4);
+            }
+        if (x1 > x0 && y1 > y0)
+        {
+            const std::size_t rowOff = mipOffset(t, l) + static_cast<std::size_t>(y0) * cw * 4;
+            const std::size_t bytes = static_cast<std::size_t>(y1 - y0) * cw * 4;
+            sceKernelDcacheWritebackRange(base + rowOff, bytes);
+            if (t.vramOffset >= 0)
+                std::memcpy(reinterpret_cast<unsigned char *>(0x44000000u + static_cast<unsigned>(t.vramOffset)) + rowOff,
+                            base + rowOff, bytes);
+        }
+    }
 }
 
 // ------------------------------------------------------------------- geometry ---
@@ -441,12 +498,20 @@ void applyTexture()
     {
         g_a.boundTex = g_boundTexture;
         g_a.texEpoch = t->epoch;
-        sceGuTexMode(GU_PSM_8888, 0, 0, 0);
-        const void *src = t->pixels;
+        sceGuTexMode(GU_PSM_8888, t->levels - 1, 0, 0);
+        const unsigned char *src = reinterpret_cast<const unsigned char *>(t->pixels);
         if (t->vramOffset >= 0)
-            src = reinterpret_cast<const void *>(0x04000000u + static_cast<unsigned>(t->vramOffset));
-        sceGuTexImage(0, t->tw, t->th, t->tw, src);
-        sceGuTexFilter(t->blur ? GU_LINEAR : GU_NEAREST, t->blur ? GU_LINEAR : GU_NEAREST);
+            src = reinterpret_cast<const unsigned char *>(0x04000000u + static_cast<unsigned>(t->vramOffset));
+        for (int l = 0; l < t->levels; ++l)
+            sceGuTexImage(l, t->tw >> l, t->th >> l, t->tw >> l, src + mipOffset(*t, l));
+        if (t->levels > 1)
+        {
+            sceGuTexLevelMode(GU_TEXTURE_AUTO, 0.0f);
+            sceGuTexFilter(t->blur ? GU_LINEAR_MIPMAP_LINEAR : GU_NEAREST_MIPMAP_NEAREST,
+                           t->blur ? GU_LINEAR : GU_NEAREST);
+        }
+        else
+            sceGuTexFilter(t->blur ? GU_LINEAR : GU_NEAREST, t->blur ? GU_LINEAR : GU_NEAREST);
         sceGuTexWrap(t->clamp ? GU_CLAMP : GU_REPEAT, t->clamp ? GU_CLAMP : GU_REPEAT);
         sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
         g_a.texScaleU = -1.0f; // scale depends on the texture
@@ -891,19 +956,23 @@ bool renderTextureBeginUpload(int texture, int width, int height, int, bool blur
 
     const int tw = pow2AtLeast(width), th = pow2AtLeast(height);
     if (tw > kMaxTextureSize || th > kMaxTextureSize || width <= 0 || height <= 0) return false;
-    if (!t.created || t.tw != tw || t.th != th)
+    const int wantLevels = (tileAtlas && width == tw && height == th && tw >= 64 && th >= 64) ? kAtlasMipLevels : 1;
+    if (!t.created || t.tw != tw || t.th != th || t.levels != wantLevels)
     {
         releaseTextureStorage(t);
-        t.pixels = static_cast<std::uint32_t *>(memalign(16, static_cast<std::size_t>(tw) * th * 4));
-        if (!t.pixels) return false;
-        std::memset(t.pixels, 0, static_cast<std::size_t>(tw) * th * 4);
-        t.created = true;
         t.tw = tw;
         t.th = th;
-        // Mirror textures that matter for fill rate into VRAM when there is room.
+        t.levels = wantLevels;
         const std::size_t bytes = static_cast<std::size_t>(tw) * th * 4;
+        t.totalBytes = mipOffset(t, wantLevels - 1) + (wantLevels > 1 ? static_cast<std::size_t>(tw >> (wantLevels - 1)) * (th >> (wantLevels - 1)) * 4 : bytes);
+        if (wantLevels == 1) t.totalBytes = bytes;
+        t.pixels = static_cast<std::uint32_t *>(memalign(16, t.totalBytes));
+        if (!t.pixels) return false;
+        std::memset(t.pixels, 0, t.totalBytes);
+        t.created = true;
+        // Mirror textures that matter for fill rate into VRAM when there is room.
         if (tileAtlas || bytes <= 64 * 1024)
-            t.vramOffset = vramTake(bytes);
+            t.vramOffset = vramTake(t.totalBytes);
     }
     t.w = width;
     t.h = height;
@@ -931,6 +1000,7 @@ void renderTextureImageRgba(int level, int width, int height, const void *pixels
                     src + static_cast<std::size_t>(y) * width * 4, static_cast<std::size_t>(w) * 4);
     sceKernelDcacheWritebackRange(t->pixels, static_cast<std::size_t>(t->tw) * t->th * 4);
     mirrorToVram(*t, 0, t->th);
+    rebuildMips(*t, 0, 0, t->tw, t->th);
     sceGuTexFlush();
     ++t->epoch;
 }
@@ -948,6 +1018,7 @@ void renderTextureSubImageRgba(int level, int x, int y, int width, int height, c
     sceKernelDcacheWritebackRange(reinterpret_cast<unsigned char *>(t->pixels) + static_cast<std::size_t>(y) * t->tw * 4,
                                   static_cast<std::size_t>(height) * t->tw * 4);
     mirrorToVram(*t, y, height);
+    rebuildMips(*t, x, y, width, height);
     g_a.boundTex = -1; // force a texture-cache flush on the next draw
     sceGuTexFlush();
 }
