@@ -128,6 +128,10 @@ Sample *loadSample(const std::string &url)
         }
     }
     free(data);
+    {
+        static int traced = 0;
+        if (traced < 12) { ++traced; PspSystem::bootTrace("audio: sample %s -> %s", url.c_str(), out ? "ok" : "FAIL"); }
+    }
     if (!out)
         return nullptr;
     g_cacheBytes += out->pcm.size() * 2;
@@ -162,6 +166,7 @@ struct MusicStream
 {
     std::string archive;
     std::uint32_t offset = 0, size = 0;
+    SceUID fd = -1; // opened by the game thread (path resolution is not thread-safe here)
     unsigned char *ring = nullptr;
     volatile std::uint32_t rd = 0, wr = 0; // byte counters (monotonic)
     volatile int eof = 0, stop = 0, mixerDone = 0;
@@ -177,7 +182,7 @@ volatile int g_musicRunning = 0;             // 1 from start until the reader th
 int musicReaderThread(SceSize, void *argp)
 {
     MusicStream *ms = *static_cast<MusicStream **>(argp);
-    SceUID fd = sceIoOpen(ms->archive.c_str(), PSP_O_RDONLY, 0);
+    SceUID fd = ms->fd;
     std::uint32_t filePos = 0;
     if (fd >= 0)
     {
@@ -225,15 +230,19 @@ bool startMusic(const std::string &url)
         return false;
     MusicStream *ms = new MusicStream();
     ms->archive = AssetPak::archivePath();
+    ms->fd = sceIoOpen(ms->archive.c_str(), PSP_O_RDONLY, 0);
+    PspSystem::bootTrace("audio: music %s fd=%d off=%u size=%u", url.c_str(), (int)ms->fd, off, sz);
+    if (ms->fd < 0) { delete ms; return false; }
     ms->offset = off;
     ms->size = sz;
     ms->ring = static_cast<unsigned char *>(malloc(kRingBytes));
-    if (!ms->ring) { delete ms; return false; }
+    if (!ms->ring) { sceIoClose(ms->fd); delete ms; return false; }
     g_musicRunning = 1;
     SceUID th = sceKernelCreateThread("music", musicReaderThread, 0x30, 16 * 1024, THREAD_ATTR_USER, nullptr);
     if (th < 0)
     {
         g_musicRunning = 0;
+        sceIoClose(ms->fd);
         free(ms->ring);
         delete ms;
         return false;
