@@ -4,6 +4,7 @@
 #include "net/minecraft/src/GameSettings.h"
 #include "pc/CrashHandler.h"
 #include "platform/PlatformConfig.h"
+#include "platform/GameSettingsBackend.h"
 
 namespace ClientPlatformPolicy
 {
@@ -42,6 +43,10 @@ void applyGameSettingsDefaults(GameSettings* settings)
     settings->ofPortalParticles = false;
     settings->ofDrippingWaterLava = false;
     settings->ofWeather = false;
+    settings->legacyCrafting = true;
+    settings->ofRenderDistanceFine = 40; // ~2.5 chunks
+    platformGameSettingsUpdateRenderDistanceFromFine(settings->ofRenderDistanceFine, settings->renderDistance);
+    platformGameSettingsApplyLegacyCrafting(*settings);
     settings->ofSky = true;
     settings->ofSunMoon = true;
     settings->ofClouds = 1; // fast clouds

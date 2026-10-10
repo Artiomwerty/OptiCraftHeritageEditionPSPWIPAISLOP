@@ -25,6 +25,9 @@
 #include "pc/lwjgl/Keyboard.h"
 #include "platform/Input.h"
 #include "platform/PlatformConfig.h"
+#ifdef PSP_PLATFORM
+#include "psp/input/PspInput.h"
+#endif
 
 GuiIngameMenu::GuiIngameMenu()
 	: updateCounter2(0)
@@ -84,6 +87,11 @@ void GuiIngameMenu::initGui()
 	controlList.push_back(new GuiButton(0, width / 2 - 100, height / 4 + 96 + off, StatCollector::translateToLocal("menu.options")));
 	controlList.push_back(new GuiButton(5, width / 2 - 100, height / 4 + 48 + off, 98, 20, StatCollector::translateToLocal("gui.achievements")));
 	controlList.push_back(new GuiButton(6, width / 2 + 2,   height / 4 + 48 + off, 98, 20, StatCollector::translateToLocal("gui.stats")));
+#ifdef PSP_PLATFORM
+	// Start with the cursor on "Back to game" so Start/Cross resumes at once and D-pad moves from there.
+	if (mc != nullptr && mc->displayWidth > 0)
+		PspInput::warpCursor(((width / 2) * mc->displayWidth) / width, ((height / 4 + 24 + off + 10) * mc->displayHeight) / height);
+#endif
 }
 
 

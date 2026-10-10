@@ -156,8 +156,56 @@ void GuiScreen::drawScreen(int_t mouseX, int_t mouseY, float_t partialTick)
 #endif
 }
 
+#ifdef PSP_PLATFORM
+#include "psp/input/PspInput.h"
+// D-pad navigation for the plain (non-legacy) menus: jump the cursor to the nearest enabled button in
+// the pressed direction, so the highlight follows the D-pad like a console menu.
+static bool pspDpadNavigate(GuiScreen *screen, std::vector<GuiButton *> &list, int_t key, int_t gw, int_t gh,
+                            Minecraft *mc)
+{
+	int dirX = 0, dirY = 0;
+	if (key == lwjgl::Keyboard::KEY_UP) dirY = -1;
+	else if (key == lwjgl::Keyboard::KEY_DOWN) dirY = 1;
+	else if (key == lwjgl::Keyboard::KEY_LEFT) dirX = -1;
+	else if (key == lwjgl::Keyboard::KEY_RIGHT) dirX = 1;
+	else return false;
+	if (list.empty() || mc == nullptr) return false;
+	int px = 0, py = 0;
+	if (!PspInput::menuCursor(px, py)) { px = 240; py = 136; }
+	const float sx = (float)gw / (float)mc->displayWidth, sy = (float)gh / (float)mc->displayHeight;
+	const float cx = px * sx, cy = py * sy;
+	GuiButton *best = nullptr;
+	float bestScore = 1e9f;
+	GuiButton *wrap = nullptr;
+	float wrapKey = dirY != 0 ? (dirY > 0 ? 1e9f : -1e9f) : 0.f;
+	for (GuiButton *b : list)
+	{
+		if (b == nullptr || !b->enabled || !b->enabled2) continue;
+		const float bx = b->xPosition + b->getButtonWidth() * 0.5f, by = b->yPosition + b->getButtonHeight() * 0.5f;
+		const float dx = bx - cx, dy = by - cy;
+		if (dirY != 0)
+		{
+			if (dirY * dy > 2.f && dirY * dy + 0.25f * (dx < 0 ? -dx : dx) < bestScore)
+			{ bestScore = dirY * dy + 0.25f * (dx < 0 ? -dx : dx); best = b; }
+			if ((dirY > 0 && by < wrapKey) || (dirY < 0 && by > wrapKey) || wrap == nullptr) { wrapKey = by; wrap = b; }
+		}
+		else if ((dy < 0 ? -dy : dy) < b->getButtonHeight() * 0.6f && dirX * dx > 2.f && dirX * dx < bestScore)
+		{ bestScore = dirX * dx; best = b; }
+	}
+	if (best == nullptr) best = (dirY != 0) ? wrap : nullptr;
+	if (best == nullptr) return dirX != 0 ? false : true;
+	const float tx = best->xPosition + best->getButtonWidth() * 0.5f, ty = best->yPosition + best->getButtonHeight() * 0.5f;
+	PspInput::warpCursor((int)(tx / sx), (int)(ty / sy));
+	(void)screen;
+	return true;
+}
+#endif
+
 void GuiScreen::keyTyped(char_t c, int_t key)
 {
+#ifdef PSP_PLATFORM
+	if (pspDpadNavigate(this, controlList, key, width, height, mc)) return;
+#endif
 	if (key == 1)
 	{
 		if (mc != nullptr && mc->gameSettings != nullptr && mc->gameSettings->legacyUI)

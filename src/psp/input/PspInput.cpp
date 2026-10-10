@@ -102,6 +102,14 @@ void init()
 
 bool exitRequested() { return g_exit; }
 
+void warpCursor(int x, int y)
+{
+	const int ox = g_cx, oy = g_cy;
+	g_cx = (int)clampf((float)x, 0.f, (float)(PspGu::kScreenWidth - 1));
+	g_cy = (int)clampf((float)y, 0.f, (float)(PspGu::kScreenHeight - 1));
+	lwjgl::Mouse::detail::pushMotion(g_cx, g_cy, g_cx - ox, g_cy - oy);
+}
+
 bool menuCursor(int &x, int &y)
 {
 	x = g_cx;
