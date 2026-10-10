@@ -176,6 +176,7 @@ struct Texture
     bool blur = false, clamp = false;
     int vramOffset = -1;
     int epoch = 0;
+    bool atlas = false;             // terrain/item atlas: always point-sampled
     int levels = 1;                 // mip levels stored (tile atlases get a chain, see mipOffset)
     std::size_t totalBytes = 0;     // all levels
 };
@@ -511,7 +512,10 @@ void applyTexture()
                            t->blur ? GU_LINEAR : GU_NEAREST);
         }
         else
-            sceGuTexFilter(t->blur ? GU_LINEAR : GU_NEAREST, t->blur ? GU_LINEAR : GU_NEAREST);
+        {
+            const bool lin = t->blur && !t->atlas; // atlases are never smoothed: tiles must stay crisp
+            sceGuTexFilter(lin ? GU_LINEAR : GU_NEAREST, lin ? GU_LINEAR : GU_NEAREST);
+        }
         sceGuTexWrap(t->clamp ? GU_CLAMP : GU_REPEAT, t->clamp ? GU_CLAMP : GU_REPEAT);
         sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
         g_a.texScaleU = -1.0f; // scale depends on the texture
@@ -978,6 +982,9 @@ bool renderTextureBeginUpload(int texture, int width, int height, int, bool blur
     t.h = height;
     t.blur = blur;
     t.clamp = clamp;
+    t.atlas = tileAtlas;
+    if (width >= 128 || tileAtlas)
+        PspSystem::bootTrace("texture upload id=%d %dx%d atlas=%d blur=%d clamp=%d", texture, width, height, tileAtlas ? 1 : 0, blur ? 1 : 0, clamp ? 1 : 0);
     t.epoch = g_texEpochCounter++;
     return true;
 }
