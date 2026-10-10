@@ -7,6 +7,8 @@ copies everything else into a new pak the same PakArchive reader opens.
 
 Usage:  make_psp_pak.py <full assets.pak> <output assets.pak>
         [--keep-music]   keep the .pcm music/streaming entries
+        [--tracks=a,b]   keep only these background-music tracks (file stems, e.g.
+                         calm1,calm2,piano1); music discs (streaming/) are always dropped
 """
 
 import os
@@ -38,6 +40,10 @@ def read_entries(path):
 
 def main(argv):
     keep_music = "--keep-music" in argv
+    tracks = None
+    for a in argv:
+        if a.startswith("--tracks="):
+            tracks = set(a[len("--tracks="):].lower().split(","))
     args = [a for a in argv[1:] if not a.startswith("--")]
     if len(args) != 2:
         raise SystemExit(__doc__)
@@ -47,7 +53,16 @@ def main(argv):
     with tempfile.TemporaryDirectory() as tmp, open(src, "rb") as f:
         for key, off, size in read_entries(src):
             low = key.lower()
-            if low.startswith(DROP_PREFIXES) or (
+            if tracks is not None and low.startswith(("resources/music/", "resources/newmusic/")):
+                stem = os.path.splitext(os.path.basename(low))[0]
+                if stem not in tracks:
+                    dropped += 1
+                    dropped_bytes += size
+                    continue
+                keep_this = True
+            else:
+                keep_this = False
+            if low.startswith(DROP_PREFIXES) or (not keep_this and
                     not keep_music and (low.startswith(MUSIC_PREFIXES) or low.endswith(".pcm"))):
                 dropped += 1
                 dropped_bytes += size

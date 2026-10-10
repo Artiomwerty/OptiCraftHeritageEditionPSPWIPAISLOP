@@ -42,9 +42,9 @@ void applyGameSettingsDefaults(GameSettings* settings)
     settings->ofPortalParticles = false;
     settings->ofDrippingWaterLava = false;
     settings->ofWeather = false;
-    settings->ofSky = false;
-    settings->ofSunMoon = false;
-    settings->ofClouds = 3;
+    settings->ofSky = true;
+    settings->ofSunMoon = true;
+    settings->ofClouds = 1; // fast clouds
 #else
     (void)settings;
 #endif

@@ -356,6 +356,11 @@ void GameSettings::loadOptions()
 	// build must not trap the player in the console-style screens.
 	legacyUI = false;
 	legacyLook = false;
+	// Sky, sun/moon and (fast) clouds were switched off in earlier test builds and saved that way.
+	ofSky = true;
+	ofSunMoon = true;
+	if (ofClouds == 3)
+		ofClouds = 1;
 #endif
 	legacyGuiScaleRestore = legacyUiRestoreScaleAfterLoad(
 		legacyUI, guiScale, loadedLegacyGuiScaleRestore, legacyGuiScaleRestore);

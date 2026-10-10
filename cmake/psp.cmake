@@ -72,6 +72,7 @@ elseif(PSP_APP STREQUAL "GAME")
     mcbeta_exclude_remote_stats_sources(PSP_SOURCES)
     mcbeta_select_platform_backends(PSP_SOURCES PSP GU_PSP PSP)
     list(APPEND PSP_SOURCES
+        "${CMAKE_SOURCE_DIR}/src/ps2/audio/Ps2AdpcmStreamDecoder.cpp"
         "${CMAKE_SOURCE_DIR}/external/zlib/contrib/minizip/ioapi.c"
         "${CMAKE_SOURCE_DIR}/external/zlib/contrib/minizip/unzip.c")
     set_source_files_properties(
