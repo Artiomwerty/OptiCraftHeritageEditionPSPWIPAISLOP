@@ -677,6 +677,9 @@ void SkinManager::setSelectedSkinIdP2(const std::string& id)
 
 std::string SkinManager::getPlayer2SkinTexture()
 {
+#ifdef PSP_PLATFORM
+    return getDefaultSkinTexture(); // the PSP pak ships only the vanilla /mob/char.png skin
+#endif
     init();
     const SkinEntry* skin = getSkinById(s_selectedIdP2);
     if (skin != nullptr)
@@ -686,6 +689,9 @@ std::string SkinManager::getPlayer2SkinTexture()
 
 std::string SkinManager::getActiveSkinTexture()
 {
+#ifdef PSP_PLATFORM
+    return getDefaultSkinTexture(); // the PSP pak ships only the vanilla /mob/char.png skin
+#endif
     init();
     const SkinEntry* skin = getSkinById(s_selectedId);
     if (skin != nullptr)

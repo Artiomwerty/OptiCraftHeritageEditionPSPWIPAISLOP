@@ -306,13 +306,13 @@
 #  define PLATFORM_ENABLE_GREEDY_MESH                   0
 #  define PLATFORM_SKIP_ENTITY_SHADOWS                  (PLATFORM_PC_LEGACY ? PC_LEGACY_SKIP_ENTITY_SHADOWS : 0)
 #  define PLATFORM_SKIP_WORLD_ENTITIES                  0
-#  define PLATFORM_SKIP_WORLD_PARTICLES                 (PLATFORM_PC_LEGACY ? PC_LEGACY_SKIP_WORLD_PARTICLES : 0)
+#  define PLATFORM_SKIP_WORLD_PARTICLES                 ((PLATFORM_PC_LEGACY && !PLATFORM_PSP) ? PC_LEGACY_SKIP_WORLD_PARTICLES : 0)
 // Vanilla particle behaviour: full entity physics, brightness per frame,
 // 4x4x4 fragments per broken block, 4000 per layer, 1000 display probes.
 #  define PLATFORM_FAST_PARTICLE_PHYSICS                0
 #  define PLATFORM_PARTICLE_BRIGHTNESS_INTERVAL         1
-#  define PLATFORM_BLOCK_DESTROY_PARTICLE_GRID          4
-#  define PLATFORM_MAX_PARTICLES_PER_LAYER              4000
+#  define PLATFORM_BLOCK_DESTROY_PARTICLE_GRID          (PLATFORM_PSP ? 2 : 4)
+#  define PLATFORM_MAX_PARTICLES_PER_LAYER              (PLATFORM_PSP ? 200 : 4000)
 #  define PLATFORM_RANDOM_DISPLAY_PROBES                1000
 #  define PLATFORM_SKIP_RAIN_SNOW                       (PLATFORM_PC_LEGACY ? PC_LEGACY_SKIP_RAIN_SNOW : 0)
 #  define PLATFORM_SKIP_CLOUDS                          0
