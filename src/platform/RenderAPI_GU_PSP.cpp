@@ -180,7 +180,7 @@ struct Texture
     std::size_t totalBytes = 0;     // all levels
 };
 
-constexpr int kAtlasMipLevels = 4;  // 256x256 atlas: 16px tiles down to 2px
+constexpr int kAtlasMipLevels = 1;  // mip chain disabled: partial-alpha mip texels made grass/leaf quads show as glassy squares
 
 inline std::size_t mipOffset(const Texture &t, int level)
 {
