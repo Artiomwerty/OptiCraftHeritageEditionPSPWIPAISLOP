@@ -119,7 +119,7 @@ add_custom_command(TARGET OptiCraft POST_BUILD
     VERBATIM)
 target_link_options(OptiCraft PRIVATE "-Wl,-Map,${CMAKE_SOURCE_DIR}/bin/psp/OptiCraft.map")
 if(PSP_APP STREQUAL "GAME")
-    target_link_options(OptiCraft PRIVATE "-Wl,--wrap=pthread_create")
+    target_link_options(OptiCraft PRIVATE "-Wl,--wrap=pthread_create" "-Wl,--wrap=__cxa_throw")
 endif()
 
 # MEMSIZE=1 asks the firmware for all RAM (64 MB on PSP-2000+). Without it,
