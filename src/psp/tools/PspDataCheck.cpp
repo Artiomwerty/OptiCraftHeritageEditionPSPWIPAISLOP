@@ -326,7 +326,9 @@ void drawTexture(const Texture &t, float cx, float cy, float zoom, bool smooth)
 	const float hw = t.w * zoom * 0.5f, hh = t.h * zoom * 0.5f;
 	SpriteVertex *v = static_cast<SpriteVertex *>(sceGuGetMemory(2 * sizeof(SpriteVertex)));
 	v[0] = { 0.0f, 0.0f, cx - hw, cy - hh, 0.0f };
-	v[1] = { static_cast<float>(t.w) / t.tw, static_cast<float>(t.h) / t.th, cx + hw, cy + hh, 0.0f };
+	// GU_TRANSFORM_2D is the GE's "through" mode: UVs are in TEXELS, not 0..1. (Normalised UVs
+	// sample texel 0,0 for the whole sprite = one flat colour, which was the gray-squares bug.)
+	v[1] = { static_cast<float>(t.w), static_cast<float>(t.h), cx + hw, cy + hh, 0.0f };
 	sceGuDrawArray(GU_SPRITES, GU_TEXTURE_32BITF | GU_VERTEX_32BITF | GU_TRANSFORM_2D, 2, nullptr, v);
 	sceGuDisable(GU_TEXTURE_2D);
 }
