@@ -94,7 +94,7 @@ static void menuCursor()
 	pspRenderInvalidateState();
 }
 
-void swapBuffers() { heartbeat(); menuCursor(); PspGu::present(); }
+void swapBuffers() { PspGu::present(); }
 
 void update(bool doProcessMessages)
 {

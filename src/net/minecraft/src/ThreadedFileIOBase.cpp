@@ -112,6 +112,14 @@ void ThreadedFileIOBase::queueIO(IThreadedFileIO *task)
 	if (task == nullptr)
 		return;
 
+#ifdef PSP_PLATFORM
+	// PSP: single CPU core and a pthread layer that hung the "Saving chunks" wait, so
+	// writes run inline on the calling thread. No worker, no condition variables.
+	++writeQueuedCounter;
+	while (task->writeNextIO()) {}
+	++savedIOCounter;
+	return;
+#endif
 	{
 		std::lock_guard<std::mutex> guard(queueMutex);
 		if (std::find(threadedIOQueue.begin(), threadedIOQueue.end(), task) != threadedIOQueue.end())
@@ -131,6 +139,9 @@ void ThreadedFileIOBase::queueIO(IThreadedFileIO *task)
 
 void ThreadedFileIOBase::waitForFinish()
 {
+#ifdef PSP_PLATFORM
+	return;
+#endif
 	std::unique_lock<std::mutex> lock(queueMutex);
 	isThreadWaiting = true;
 	queueCondition.notify_one();
