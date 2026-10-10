@@ -111,6 +111,17 @@ void poll(bool inMenu)
 	raw.lx = pad.Lx;
 	raw.ly = pad.Ly;
 
+	{
+		static int traced = 0;
+		static unsigned lastTraced = 0;
+		if (traced < 40 && (raw.buttons != lastTraced))
+		{
+			++traced;
+			lastTraced = raw.buttons;
+			PspSystem::bootTrace("pad: buttons=%06x lx=%d ly=%d menu=%d cursor=%d,%d\n", raw.buttons, raw.lx, raw.ly,
+			                     inMenu ? 1 : 0, g_cx, g_cy);
+		}
+	}
 	const unsigned pressed = raw.buttons & ~g_prevBtn;
 	g_prevBtn = raw.buttons;
 

@@ -242,6 +242,11 @@ struct PackedGeom
     PspPack::Prim prim = PspPack::Prim::Triangles;
     bool lit = false;
     int refs = 0;
+    // The mesh carried no per-vertex colour, so GL would colour it with whatever glColor is current
+    // when the list is *replayed* (font glyph lists rely on this). `packedColor` is what was baked
+    // in at record time; submit() re-colours a copy when the current colour differs.
+    bool needsColor = false;
+    std::uint32_t packedColor = 0xFFFFFFFFu;
 };
 
 std::uint16_t *g_quadIndices = nullptr;
@@ -599,13 +604,26 @@ void submit(const PackedGeom &g)
     if (!g.verts || g.vertexCount <= 0) return;
     traceDraw(g);
     applyState(g.lit);
+    const void *vertsToDraw = g.verts;
+    if (g.needsColor && g.packedColor != g_s.curColor && !g_s.lightmap)
+    {
+        const std::size_t vs = PspPack::vertexBytes(g.lit);
+        unsigned char *copy = static_cast<unsigned char *>(PspGu::frameAlloc(static_cast<std::size_t>(g.vertexCount) * vs));
+        if (copy)
+        {
+            std::memcpy(copy, g.verts, static_cast<std::size_t>(g.vertexCount) * vs);
+            for (int i = 0; i < g.vertexCount; ++i)
+                std::memcpy(copy + static_cast<std::size_t>(i) * vs + 8, &g_s.curColor, sizeof(std::uint32_t));
+            vertsToDraw = copy;
+        }
+    }
     const int vtype = GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D | (g.lit ? GU_NORMAL_8BIT : 0);
     const std::size_t vsize = PspPack::vertexBytes(g.lit);
     if (g.prim == PspPack::Prim::QuadsIndexed)
     {
         if (!ensureQuadIndices()) return;
         int quads = g.vertexCount / 4;
-        const unsigned char *base = static_cast<const unsigned char *>(g.verts);
+        const unsigned char *base = static_cast<const unsigned char *>(vertsToDraw);
         while (quads > 0)
         {
             const int n = std::min(quads, PspPack::kMaxQuadsPerDraw);
@@ -627,7 +645,7 @@ void submit(const PackedGeom &g)
     case PspPack::Prim::TriangleFan: gePrim = GU_TRIANGLE_FAN; break;
     default: break;
     }
-    sceGuDrawArray(gePrim, vtype, g.vertexCount, nullptr, g.verts);
+    sceGuDrawArray(gePrim, vtype, g.vertexCount, nullptr, vertsToDraw);
     PspGu::countDraw(static_cast<unsigned>(g.vertexCount));
 }
 
@@ -670,6 +688,8 @@ PackedGeom *packPersistent(const RenderInterleavedMesh &mesh)
     g->prim = res.prim;
     g->lit = res.lit;
     g->refs = 1;
+    g->needsColor = !mesh.hasColor && !mesh.positionShort;
+    g->packedColor = opt.currentColor;
     // Shrink to what was used; the vertex data must also be flushed for the GE.
     const std::size_t used = static_cast<std::size_t>(res.vertexCount) * PspPack::vertexBytes(res.lit);
     if (used + 64 < bytes)
