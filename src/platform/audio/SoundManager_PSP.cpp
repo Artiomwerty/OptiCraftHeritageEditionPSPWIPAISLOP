@@ -470,17 +470,21 @@ void SoundManager::addMusic(const jstring &s, const std::string &file)
 
 void SoundManager::playRandomMusicIfReady()
 {
+    // Menu and world both call this every tick. A track starts right away on the title screen; after
+    // any track ends the next one waits two minutes (wall-clock, independent of the frame rate).
+    static int prevRunning = 0;
+    static std::uint64_t nextAllowedUs = 0;
+    const int running = g_musicRunning;
+    const std::uint64_t now = PspSystem::micros();
+    if (prevRunning && !running)
+        nextAllowedUs = now + 120ull * 1000000ull;
+    prevRunning = running;
+
     if (!g_started || !options || options->musicVolume <= 0.0f)
         return;
-    if (g_musicRunning)
+    if (running || now < nextAllowedUs)
         return;
-    if (ticksBeforeMusic > 0)
-    {
-        ticksBeforeMusic--;
-        return;
-    }
     SoundPoolEntry *entry = soundPoolMusic.getRandomSound();
-    ticksBeforeMusic = rand.nextInt(1200) + 600;
     if (entry)
         startMusic(entry->soundUrl);
 }
