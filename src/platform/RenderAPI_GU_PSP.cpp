@@ -1004,7 +1004,7 @@ bool renderTextureIsValid(int texture)
 }
 
 // Tall grass / fern sprites are high-contrast per-pixel noise; without mipmaps they shimmer badly on a
-// 480x272 screen. Pull each texel 60% toward the tile's mean colour (alpha untouched) so they are calm.
+// 480x272 screen. Pull each texel 30% toward the tile's mean colour (alpha untouched) so they are calm.
 void softenGrassTile(Texture &t, int tileIndex)
 {
     const int ts = t.tw / 16;
@@ -1026,7 +1026,7 @@ void softenGrassTile(Texture &t, int tileIndex)
             std::uint32_t &c = t.pixels[static_cast<std::size_t>(y0 + y) * t.tw + x0 + x];
             if ((c >> 24) == 0) continue;
             const int r = (c & 255), g = (c >> 8) & 255, b = (c >> 16) & 255;
-            const int nr = r + (mr - r) * 6 / 10, ng = g + (mg - g) * 6 / 10, nb = b + (mb - b) * 6 / 10;
+            const int nr = r + (mr - r) * 3 / 10, ng = g + (mg - g) * 3 / 10, nb = b + (mb - b) * 3 / 10;
             c = (c & 0xFF000000u) | (static_cast<std::uint32_t>(nb) << 16) | (static_cast<std::uint32_t>(ng) << 8) | static_cast<std::uint32_t>(nr);
         }
 }
