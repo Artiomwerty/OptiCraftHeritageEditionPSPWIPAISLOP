@@ -2,6 +2,8 @@
 #ifdef PSP_PLATFORM
 
 #include <pspkernel.h>
+#include <cerrno>
+#include <cstdio>
 #include <pspiofilemgr.h>
 #include <psppower.h>
 #include <unistd.h>
@@ -57,6 +59,24 @@ int main(int argc, char **argv)
 			sceIoClose(fd);
 			PspSystem::bootTrace("pak probe: open ok, size=%d magic=%02x%02x%02x%02x ('%.4s')\n", size,
 			                     (unsigned char)magic[0], (unsigned char)magic[1], (unsigned char)magic[2], (unsigned char)magic[3], magic);
+		}
+	}
+	{
+		// stdio probe, mirrors what PakArchive does.
+		const std::string pak = PspSystem::appDir() + "/assets.pak";
+		FILE *f = fopen(pak.c_str(), "rb");
+		if (!f)
+			PspSystem::bootTrace("stdio probe: fopen failed errno=%d\n", errno);
+		else
+		{
+			unsigned char h[32] = {0};
+			const size_t n = fread(h, 1, 32, f);
+			PspSystem::bootTrace("stdio probe: fopen ok, read %u header bytes, magic=%.4s\n", (unsigned)n, (const char *)h);
+			const int sk = fseek(f, 11360, SEEK_SET);
+			unsigned char t[16] = {0};
+			const size_t n2 = fread(t, 1, 16, f);
+			PspSystem::bootTrace("stdio probe: fseek=%d read=%u\n", sk, (unsigned)n2);
+			fclose(f);
 		}
 	}
 	PspSystem::bootTrace("main: assets.pak mounted=%d path=%s\n", AssetPak::mountFrom(PspSystem::appDir()) ? 1 : 0, AssetPak::archivePath().c_str());
