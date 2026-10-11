@@ -198,6 +198,8 @@ struct MusicStream
     bool primed = false;
 };
 
+std::string g_pendingDisc;
+bool g_discActive = false;
 MusicStream *volatile g_musicCur = nullptr;  // owned by the mixer thread
 MusicStream *volatile g_musicNext = nullptr; // handed over by the game thread
 volatile int g_musicRunning = 0;             // 1 from start until the mixer has released the stream
@@ -239,15 +241,98 @@ void musicRefill(MusicStream *m, std::uint32_t maxBytes)
     }
 }
 
+// Extra music packs: musicN.pak files next to assets.pak (same MCPK format, music entries only), so the
+// big soundtrack can be installed as several small downloads. Entries are addressed as "pakx://<key>".
+struct ExtraEntry { std::string path; std::uint32_t off; std::uint32_t size; };
+std::unordered_map<std::string, ExtraEntry> g_extra;
+
+std::uint32_t be32(const unsigned char *p)
+{
+    return (std::uint32_t(p[0]) << 24) | (std::uint32_t(p[1]) << 16) | (std::uint32_t(p[2]) << 8) | p[3];
+}
+
+void scanExtraPak(const std::string &path, std::vector<std::pair<std::string, std::string>> &music)
+{
+    const SceUID fd = sceIoOpen(path.c_str(), PSP_O_RDONLY, 0);
+    if (fd < 0) return;
+    unsigned char h[32];
+    if (sceIoRead(fd, h, 32) == 32 && std::memcmp(h, "MCPK", 4) == 0 && be32(h + 4) == 1)
+    {
+        const std::uint32_t count = be32(h + 8), tableOff = be32(h + 12), namesOff = be32(h + 16), namesBytes = be32(h + 20);
+        if (count > 0 && count < 4096 && namesBytes < (1u << 20))
+        {
+            std::vector<unsigned char> table(count * 16), names(namesBytes + 1, 0);
+            sceIoLseek32(fd, static_cast<int>(tableOff), PSP_SEEK_SET);
+            const bool okT = sceIoRead(fd, table.data(), static_cast<SceSize>(table.size())) == static_cast<int>(table.size());
+            sceIoLseek32(fd, static_cast<int>(namesOff), PSP_SEEK_SET);
+            const bool okN = sceIoRead(fd, names.data(), namesBytes) == static_cast<int>(namesBytes);
+            if (okT && okN)
+                for (std::uint32_t i = 0; i < count; ++i)
+                {
+                    const unsigned char *e = table.data() + i * 16;
+                    const std::uint32_t nameOff = be32(e + 4), dataOff = be32(e + 8), size = be32(e + 12);
+                    if (nameOff >= namesBytes) continue;
+                    const std::string key(reinterpret_cast<const char *>(names.data() + nameOff));
+                    if (key.compare(0, 10, "resources/") != 0 || key.size() < 5 || key.compare(key.size() - 4, 4, ".pcm") != 0)
+                        continue;
+                    if (AssetPak::exists(key)) continue; // already in the main pak
+                    const std::string url = "pakx://" + key;
+                    g_extra[url] = ExtraEntry{path, dataOff, size};
+                    if (key.compare(0, 20, "resources/streaming/") != 0)
+                        music.emplace_back(key, url);
+                }
+        }
+    }
+    sceIoClose(fd);
+}
+
+void scanExtraPaks(std::vector<std::pair<std::string, std::string>> &music)
+{
+    std::string arch = AssetPak::archivePath();
+    const std::size_t slash = arch.find_last_of("/:");
+    if (arch.empty() || slash == std::string::npos) return;
+    const std::string dir = arch.substr(0, slash + 1);
+    const SceUID d = sceIoDopen(dir.c_str());
+    if (d < 0) return;
+    SceIoDirent ent;
+    std::memset(&ent, 0, sizeof(ent));
+    while (sceIoDread(d, &ent) > 0)
+    {
+        std::string n = ent.d_name;
+        std::string low;
+        for (char c : n) low += static_cast<char>((c >= 'A' && c <= 'Z') ? c + 32 : c);
+        if (low.size() > 9 && low.compare(0, 5, "music") == 0 && low.compare(low.size() - 4, 4, ".pak") == 0)
+        {
+            scanExtraPak(dir + n, music);
+            PspSystem::bootTrace("audio: extra pak %s", n.c_str());
+        }
+        std::memset(&ent, 0, sizeof(ent));
+    }
+    sceIoDclose(d);
+}
+
 bool startMusic(const std::string &url)
 {
-    if (!g_started || g_musicRunning || g_musicNext || !AssetPak::isPakPath(url))
+    if (!g_started || g_musicRunning || g_musicNext)
         return false;
     std::uint32_t off = 0, sz = 0;
-    if (!AssetPak::locate(AssetPak::keyOf(url), &off, &sz) || sz < 4096)
+    std::string archive;
+    const auto ex = g_extra.find(url);
+    if (ex != g_extra.end())
+    {
+        archive = ex->second.path;
+        off = ex->second.off;
+        sz = ex->second.size;
+    }
+    else
+    {
+        if (!AssetPak::isPakPath(url) || !AssetPak::locate(AssetPak::keyOf(url), &off, &sz))
+            return false;
+        archive = AssetPak::archivePath();
+    }
+    if (sz < 4096)
         return false;
     MusicStream *ms = new MusicStream();
-    const std::string archive = AssetPak::archivePath();
     ms->fd = sceIoOpen(archive.c_str(), PSP_O_RDONLY, 0);
     PspSystem::bootTrace("audio: music %s fd=%d off=%u size=%u", url.c_str(), (int)ms->fd, off, sz);
     if (ms->fd < 0) { delete ms; return false; }
@@ -438,6 +523,13 @@ void SoundManager::tryToSetLibraryAndCodecs()
         g_started = true;
         loaded = true;
         PspSystem::bootTrace("audio: mixer started");
+        {
+            std::vector<std::pair<std::string, std::string>> extra;
+            scanExtraPaks(extra);
+            for (const auto &e : extra)
+                soundPoolMusic.addSound(e.first, e.second);
+            PspSystem::bootTrace("audio: %d extra music tracks", (int)extra.size());
+        }
     }
     else
         PspSystem::bootTrace("audio: mixer failed to start (%d)", th);
@@ -480,6 +572,16 @@ void SoundManager::playRandomMusicIfReady()
         nextAllowedUs = now + 120ull * 1000000ull;
     prevRunning = running;
 
+    if (!running)
+        g_discActive = false;
+    if (!g_pendingDisc.empty() && !running && !g_musicNext && g_started)
+    {
+        g_discActive = startMusic(g_pendingDisc);
+        g_pendingDisc.clear();
+        return;
+    }
+    if (!g_pendingDisc.empty() || g_discActive)
+        return;
     if (!g_started || !options || options->musicVolume <= 0.0f)
         return;
     if (running || now < nextAllowedUs)
@@ -502,7 +604,26 @@ void SoundManager::setListenerPosition(EntityLiving *entityliving, float partial
     updateAudioListener(g_listener, entityliving, partialTick);
 }
 
-void SoundManager::playStreaming(const jstring &, float, float, float, float, float) {}
+void SoundManager::playStreaming(const jstring &name, float, float, float, float, float)
+{
+    // Music discs (jukebox): stop whatever plays, then stream resources/streaming/<name>.pcm.
+    if (!g_started) return;
+    if (name.empty())
+    {
+        g_pendingDisc.clear();
+        if (g_discActive) stopMusic();
+        return;
+    }
+    const std::string key = "resources/streaming/" + std::string(name) + ".pcm";
+    std::string url = "pakx://" + key;
+    if (g_extra.find(url) == g_extra.end())
+    {
+        if (!AssetPak::exists(key)) return;
+        url = AssetPak::makePath(key);
+    }
+    g_pendingDisc = url;
+    stopMusic();
+}
 
 void SoundManager::playSound(const jstring &s, float x, float y, float z, float volume, float)
 {
