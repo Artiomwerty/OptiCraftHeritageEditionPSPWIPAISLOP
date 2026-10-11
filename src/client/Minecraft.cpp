@@ -220,6 +220,7 @@ namespace
 // whether to mirror them to a persistent boot log.
 #ifdef PSP_PLATFORM
 #include "psp/system/PspSystem.h"
+#include "psp/render/PspGuDevice.h"
 #define PLATFORM_BOOT_LOG(...) PspSystem::bootTrace(__VA_ARGS__)
 #else
 #define PLATFORM_BOOT_LOG(...) MC_LOG_INFO("client.boot", __VA_ARGS__)
@@ -966,6 +967,9 @@ void Minecraft::run()
                         PspSystem::bootTrace("loop %d: elapsedTicks=%d ticksRan=%d", psTraceFrames, (int)timer->elapsedTicks, (int)ticksRan);
                 }
 #endif
+#if PLATFORM_PSP
+                const std::uint64_t pspTickT0 = PspSystem::micros();
+#endif
                 for (int_t j = 0; j < timer->elapsedTicks; j++)
                 {
                     ticksRan++;
@@ -987,6 +991,9 @@ void Minecraft::run()
                         displayGuiScreen(new GuiConflictWarning());
                     }
                 }
+#if PLATFORM_PSP
+                PspGu::prof().tick += (unsigned)(PspSystem::micros() - pspTickT0);
+#endif
                 long_t l2 = System::nanoTime() - l1;
                 ClientProfiler::ticks(l2, clientTicksThisFrame);
                 checkGLError("Pre render");
@@ -994,14 +1001,26 @@ void Minecraft::run()
                 sndManager->setListenerPosition(thePlayer, timer->renderPartialTicks);
                 renderEnable(RenderCapability::Texture2D);
 
+#if PLATFORM_PSP
+                const std::uint64_t pspLightT0 = PspSystem::micros();
+#endif
                 const long_t clientLightingStartNs = System::nanoTime();
                 if (theWorld != nullptr)
                     theWorld->updatingLighting();
+#if PLATFORM_PSP
+                PspGu::prof().light += (unsigned)(PspSystem::micros() - pspLightT0);
+#endif
                 ClientProfiler::lighting(System::nanoTime() - clientLightingStartNs);
 
+#if PLATFORM_PSP
+                const std::uint64_t pspDispT0 = PspSystem::micros();
+#endif
                 const long_t swapStartNs = System::nanoTime();
                 if (!lwjgl::Keyboard::isKeyDown(0x41))
                     lwjgl::Display::update();
+#if PLATFORM_PSP
+                PspGu::prof().display += (unsigned)(PspSystem::micros() - pspDispT0);
+#endif
                 ClientProfiler::displayUpdate(System::nanoTime() - swapStartNs);
                 const long_t swapEndNs = System::nanoTime();
                 cpuGpuSwapNs += swapEndNs - swapStartNs;
@@ -1021,7 +1040,13 @@ void Minecraft::run()
                         validateProcessHeap("before world render");
 
                     const long_t clientRenderStartNs = System::nanoTime();
+#if PLATFORM_PSP
+                    const std::uint64_t pspRenT0 = PspSystem::micros();
+#endif
                     entityRenderer->updateCameraAndRender(timer->renderPartialTicks);
+#if PLATFORM_PSP
+                    PspGu::prof().render += (unsigned)(PspSystem::micros() - pspRenT0);
+#endif
                     clientRenderNs = System::nanoTime() - clientRenderStartNs;
                     ClientProfiler::render(clientRenderNs);
 

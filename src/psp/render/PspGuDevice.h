@@ -46,6 +46,10 @@ struct Stats
     unsigned slowInARow = 0;
 };
 const Stats &stats();
+
+// Per-phase CPU microseconds since the last perf line (written by the game loop).
+struct Prof { unsigned tick = 0, light = 0, render = 0, display = 0; };
+Prof &prof();
 void countDraw(unsigned vertices);
 
 // VRAM suballocator for textures (bump allocation, freed all at once on reset).

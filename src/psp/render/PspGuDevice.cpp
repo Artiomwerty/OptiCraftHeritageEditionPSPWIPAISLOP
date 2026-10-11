@@ -22,6 +22,7 @@ int g_arenaIndex = 0;
 std::size_t g_arenaUsed = 0;
 bool g_init = false;
 PspFramePacer g_pacer(2);
+PspGu::Prof g_prof;
 PspGu::Stats g_stats;
 std::size_t g_vramNext = 0;
 }
@@ -219,30 +220,35 @@ void present()
     sceKernelDcacheWritebackRange(g_arena[g_arenaIndex], g_arenaUsed);
     // Frame profile for boot.log: how long the CPU took to build the frame vs how long the GE
     // then needed to draw it (the two are not overlapped yet).
-    static std::uint64_t lastEnd = 0, geSum = 0, frameSum = 0;
+    static std::uint64_t lastEnd = 0, geSum = 0, frameSum = 0, workSum = 0, lastReturn = 0;
     static unsigned profFrames = 0, profLines = 0;
     const std::uint64_t t0 = PspSystem::micros();
-    sceGuFinish();
-    sceGuSync(0, 0);
+    if (lastReturn) workSum += t0 - lastReturn;
+    sceGuFinish(); // submit: the GE starts drawing now, in parallel with the pacing wait below
     const std::uint64_t t1 = PspSystem::micros();
-    geSum += t1 - t0;
     if (lastEnd) frameSum += t1 - lastEnd;
     lastEnd = t1;
     if (++profFrames == 120)
     {
         if (profLines++ < 14)
-            PspSystem::bootTrace("perf: %u us/frame (%.1f fps), GE %u us, CPU %u us, draws %u verts %u",
+            PspSystem::bootTrace("perf: %u us/frame (%.1f fps), work %u us (tick %u light %u render %u display %u), GE+wait %u us, draws %u verts %u",
                                  (unsigned)(frameSum / 119), 119.0e6 / (double)(frameSum ? frameSum : 1),
-                                 (unsigned)(geSum / 120), (unsigned)((frameSum / 119) - (geSum / 120)),
-                                 g_stats.drawCalls, g_stats.vertices);
+                                 (unsigned)(workSum / 120), g_prof.tick / 120, g_prof.light / 120, g_prof.render / 120,
+                                 g_prof.display / 120, (unsigned)(geSum / 120),
+                                 g_stats.lastDrawCalls, g_stats.lastVertices);
+            g_prof = Prof();
+            workSum = 0;
         profFrames = 0; geSum = 0; frameSum = 0;
     }
 
     unsigned waits = g_pacer.waitsNeeded(sceDisplayGetVcount());
     while (waits--)
         sceDisplayWaitVblankStart();
+    sceGuSync(0, 0); // the frame must be complete before it is flipped to the screen
+    geSum += PspSystem::micros() - t1;
     g_pacer.presented(sceDisplayGetVcount());
     sceGuSwapBuffers();
+    lastReturn = PspSystem::micros();
 
     ++g_stats.frames;
     if (g_stats.frames == 1 || g_stats.frames == 2 || g_stats.frames == 10 || g_stats.frames == 100 ||
@@ -277,6 +283,7 @@ void *frameAlloc(std::size_t bytes)
 }
 
 const Stats &stats() { return g_stats; }
+Prof &prof() { return g_prof; }
 
 void countDraw(unsigned vertices)
 {
