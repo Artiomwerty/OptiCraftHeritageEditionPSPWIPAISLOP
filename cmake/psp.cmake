@@ -136,6 +136,8 @@ create_pbp_file(
     TITLE "${PSP_TITLE}"
     VERSION "${PROJECT_VERSION}"
     MEMSIZE 1
+    ICON_PATH "${CMAKE_SOURCE_DIR}/assets/psp/ICON0.PNG"
+    BACKGROUND_PATH "${CMAKE_SOURCE_DIR}/assets/psp/PIC1.PNG"
     OUTPUT_DIR "${CMAKE_SOURCE_DIR}/bin/psp/OptiCraft"
 )
 
