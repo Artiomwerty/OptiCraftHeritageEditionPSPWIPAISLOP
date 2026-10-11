@@ -1,5 +1,8 @@
 #include "LegacyCraftingScreen.h"
 
+#if defined(PSP_PLATFORM)
+#include "psp/input/PspInput.h"
+#endif
 #include <algorithm>
 #include <vector>
 #include <string>
@@ -1603,6 +1606,9 @@ int LegacyCraftingScreen::getOwnerPlayerIndex() const
 void LegacyCraftingScreen::initGui()
 {
     GuiScreen::initGui();
+#if defined(PSP_PLATFORM)
+    PspInput::setShoulderPaging(true); // L / R switch categories here
+#endif
     xSize = 282;
     ySize = 168;
     guiLeft = (width - xSize) / 2;
@@ -1633,6 +1639,9 @@ void LegacyCraftingScreen::initGui()
 
 void LegacyCraftingScreen::onGuiClosed()
 {
+#if defined(PSP_PLATFORM)
+    PspInput::setShoulderPaging(false);
+#endif
     GuiScreen::onGuiClosed();
 }
 

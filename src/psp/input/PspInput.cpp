@@ -105,6 +105,9 @@ void init()
 
 bool exitRequested() { return g_exit; }
 
+static bool g_shoulderPaging = false;
+void setShoulderPaging(bool on) { g_shoulderPaging = on; }
+
 void warpCursor(int x, int y)
 {
 	const int ox = g_cx, oy = g_cy;
@@ -193,6 +196,14 @@ void poll(bool inMenu)
 		}
 		if (pressed & PspControls::BTN_CROSS) pulse(lwjgl::Keyboard::KEY_RETURN);
 		if (pressed & (PspControls::BTN_CIRCLE | PspControls::BTN_START)) pulse(lwjgl::Keyboard::KEY_ESCAPE);
+		if (g_shoulderPaging)
+		{
+			if (pressed & PspControls::BTN_L) pulse(lwjgl::Keyboard::KEY_PRIOR);
+			if (pressed & PspControls::BTN_R) pulse(lwjgl::Keyboard::KEY_NEXT);
+			mouseBtn(g_h.menuL, false, 0);
+			mouseBtn(g_h.menuR, false, 1);
+			return;
+		}
 		mouseBtn(g_h.menuL, (raw.buttons & PspControls::BTN_R) != 0, 0);
 		mouseBtn(g_h.menuR, (raw.buttons & PspControls::BTN_L) != 0, 1);
 		return;

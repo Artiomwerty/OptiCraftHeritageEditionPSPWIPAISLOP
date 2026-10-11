@@ -1774,13 +1774,66 @@ void RenderGlobal::renderSky(float f)
 	renderColor3f(f1, f2, f3);
 	if (Config::isSkyEnabled()) // OptiFine: Sky OFF (sol/luna/estrellas siguen visibles)
 	{
-#if defined(PS2_PLATFORM) || defined(WII_PLATFORM)
+#if PLATFORM_PSP
+		// The vanilla sky is two huge flat discs at y=+-16. On the PSP the GE drops triangles whose screen
+		// coordinates leave its +-2048 guard band (every disc quad near the camera does) and the far plane
+		// sits at ~80 blocks, so the sky vanished. Draw a small, finely tessellated gradient dome instead.
+		{
+			renderDisable(RenderCapability::Fog);
+			Vec3D *fogc = worldObj->getFogColor(f);
+			const float fr = (float)fogc->xCoord, fg = (float)fogc->yCoord, fb = (float)fogc->zCoord;
+			const float dr = f1 * 0.2f + 0.04f, dg = f2 * 0.2f + 0.04f, db = f3 * 0.6f + 0.1f;
+			static const float elev[] = {-90.0f, -35.0f, -8.0f, 0.0f, 8.0f, 20.0f, 38.0f, 62.0f, 90.0f};
+			const int rings = (int)(sizeof(elev) / sizeof(elev[0]));
+			const int segs = 20;
+			const float R = 50.0f;
+			auto ringColor = [&](float e, float &cr, float &cg, float &cb) {
+				if (e < 0.0f)
+				{
+					const float t = std::min(1.0f, -e / 35.0f);
+					cr = fr + (dr - fr) * t; cg = fg + (dg - fg) * t; cb = fb + (db - fb) * t;
+				}
+				else
+				{
+					float t = std::min(1.0f, e / 55.0f);
+					t = t * t * (3.0f - 2.0f * t);
+					cr = fr + (f1 - fr) * t; cg = fg + (f2 - fg) * t; cb = fb + (f3 - fb) * t;
+				}
+			};
+			tessellator->startDrawingQuads();
+			for (int r = 0; r + 1 < rings; ++r)
+			{
+				const float e0 = elev[r] * 3.1415927f / 180.0f, e1 = elev[r + 1] * 3.1415927f / 180.0f;
+				float c0r, c0g, c0b, c1r, c1g, c1b;
+				ringColor(elev[r], c0r, c0g, c0b);
+				ringColor(elev[r + 1], c1r, c1g, c1b);
+				for (int sg = 0; sg < segs; ++sg)
+				{
+					const float a0 = (float)sg * 6.2831853f / (float)segs, a1 = (float)(sg + 1) * 6.2831853f / (float)segs;
+					const float y0 = R * sinf(e0), h0 = R * cosf(e0), y1 = R * sinf(e1), h1 = R * cosf(e1);
+					tessellator->setColorRGBA_F(c0r, c0g, c0b, 1.0f);
+					tessellator->addVertex(h0 * sinf(a0), y0, h0 * cosf(a0));
+					tessellator->addVertex(h0 * sinf(a1), y0, h0 * cosf(a1));
+					tessellator->setColorRGBA_F(c1r, c1g, c1b, 1.0f);
+					tessellator->addVertex(h1 * sinf(a1), y1, h1 * cosf(a1));
+					tessellator->addVertex(h1 * sinf(a0), y1, h1 * cosf(a0));
+				}
+			}
+			tessellator->draw();
+			renderColor3f(f1, f2, f3);
+		}
+#elif defined(PS2_PLATFORM) || defined(WII_PLATFORM)
 		renderStaticMeshDraw(skyMesh);
 #else
 		renderCallDisplayList(glSkyList);
 #endif
 	}
 	renderDisable(RenderCapability::Fog);
+#if PLATFORM_PSP
+	// Sun, moon and stars sit 100 blocks out, past the far plane; pull the whole celestial sphere in.
+	renderPushMatrix();
+	renderScale(0.55f, 0.55f, 0.55f);
+#endif
 	renderDisable(RenderCapability::AlphaTest);
 	renderEnable(RenderCapability::Blend);
 	renderBlendFunc(RenderBlendFactor::SrcAlpha, RenderBlendFactor::OneMinusSrcAlpha);
@@ -1907,13 +1960,16 @@ void RenderGlobal::renderSky(float f)
 	renderEnable(RenderCapability::AlphaTest);
 	renderEnable(RenderCapability::Fog);
 	renderPopMatrix();
+#if PLATFORM_PSP
+	renderPopMatrix(); // celestial scale
+#endif
 
 	renderDisable(RenderCapability::Texture2D);
 	renderColor3f(0.0f, 0.0f, 0.0f);
 	Vec3D *playerPosition = mc->thePlayer->getPosition(f);
 	double horizonOffset = playerPosition->yCoord - worldObj->getSeaLevel();
 
-	if (Config::isSkyEnabled() && horizonOffset < 0.0)
+	if (!PLATFORM_PSP && Config::isSkyEnabled() && horizonOffset < 0.0)
 	{
 		renderPushMatrix();
 		renderTranslate(0.0f, 12.0f, 0.0f);
@@ -1957,7 +2013,7 @@ void RenderGlobal::renderSky(float f)
 	else
 		renderColor3f(f1, f2, f3);
 
-	if (Config::isSkyEnabled()) // OptiFine: Sky OFF (plano del horizonte/void)
+	if (!PLATFORM_PSP && Config::isSkyEnabled()) // OptiFine: Sky OFF (plano del horizonte/void)
 	{
 		renderPushMatrix();
 		renderTranslate(0.0f, -((float)(horizonOffset - 16.0)), 0.0f);
