@@ -3,12 +3,23 @@
 
 #include <pspkernel.h>
 #include <psppower.h>
+#include <unistd.h>
 
 #include "client/Minecraft.h"
 #include "java/String.h"
 #include "lwjgl/GLContext.h"
 #include "net/minecraft/src/Tessellator.h"
 #include "psp/system/PspSystem.h"
+
+// Runs before every other global constructor: proves the program got this far and records what libc
+// believes the current directory is (empty means path handling would crash).
+__attribute__((constructor(101))) static void earlyTrace()
+{
+	char cwd[256] = "(getcwd failed)";
+	if (!getcwd(cwd, sizeof(cwd)))
+		cwd[0] = 0;
+	PspSystem::bootTrace("early: static init, cwd='%s'\n", cwd);
+}
 
 PSP_MODULE_INFO("OptiCraft", PSP_MODULE_USER, 1, 0);
 PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER | THREAD_ATTR_VFPU);

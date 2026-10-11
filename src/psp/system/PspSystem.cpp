@@ -3,6 +3,7 @@
 #include <pspkernel.h>
 #include <psprtc.h>
 #include <cstdarg>
+#include <pspiofilemgr.h>
 #include <cstdio>
 #include <unistd.h>
 
@@ -37,23 +38,36 @@ const std::string &appDir() { return g_appDir; }
 uint64_t micros() { return static_cast<uint64_t>(sceKernelGetSystemTimeWide()); }
 uint32_t millis() { return static_cast<uint32_t>(micros() / 1000u); }
 
+// Raw sceIo logging: no libc path handling, so it works even when the C library has no usable
+// current directory (which is what crashes fopen/stat on some launches).
+static void rawWrite(const char *path, int flags, const char *text, int len)
+{
+    SceUID fd = sceIoOpen(path, flags, 0777);
+    if (fd < 0)
+        return;
+    sceIoWrite(fd, text, len);
+    sceIoClose(fd);
+}
+
 void bootTrace(const char *fmt, ...)
 {
     static int lines = 0;
     if (lines >= 320)
         return;
     ++lines;
-    char msg[256];
+    char msg[300];
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(msg, sizeof(msg), fmt, ap);
     va_end(ap);
-    std::string path = g_appDir + "/boot.log";
-    FILE *f = fopen(path.c_str(), lines == 1 ? "w" : "a");
-    if (!f)
+    char line[340];
+    const int n = snprintf(line, sizeof(line), "%8u ms  %s", (unsigned)millis(), msg);
+    if (n <= 0)
         return;
-    fprintf(f, "%8u ms  %s", (unsigned)millis(), msg);
-    fclose(f);
+    const int len = n < (int)sizeof(line) ? n : (int)sizeof(line) - 1;
+    char path[300];
+    snprintf(path, sizeof(path), "%s/boot.log", g_appDir.empty() ? "ms0:/PSP/GAME/OptiCraft" : g_appDir.c_str());
+    rawWrite(path, lines == 1 ? (PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC) : (PSP_O_WRONLY | PSP_O_CREAT | PSP_O_APPEND), line, len);
 }
 
 void exitGame() { sceKernelExitGame(); }
