@@ -14,7 +14,7 @@ constexpr int kBufferWidth = 512;
 constexpr unsigned kFrameBufferBytes = kBufferWidth * kScreenHeight * 4; // 0x88000
 // First VRAM byte free for textures: after 2 colour buffers (8888) and the 16-bit depth buffer.
 constexpr unsigned kVramFreeStart = kFrameBufferBytes * 2 + kBufferWidth * kScreenHeight * 2;
-constexpr unsigned kVramSize = 0x200000 * 2;
+constexpr unsigned kVramSize = 0x200000; // the PSP has 2 MB of VRAM; past that addresses wrap onto the frame buffers
 
 // Brings up the GE, clears both buffers, starts the first frame's command list.
 bool init();
