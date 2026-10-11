@@ -742,6 +742,33 @@ void Minecraft::startGame()
 
 void Minecraft::loadScreen()
 {
+#if PLATFORM_PSP
+    // The PSP screen is only 480x272: use 1:1 pixels (the GUI scale would shrink the area below the
+    // 256x256 logo and crop it), black background, logo centred.
+    renderViewport(0, 0, displayWidth, displayHeight);
+    renderClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    renderClear(RenderClearMask::Color | RenderClearMask::Depth);
+    renderMatrixMode(RenderMatrixMode::Projection);
+    renderLoadIdentity();
+    renderOrtho(0.0, displayWidth, displayHeight, 0.0, 1000.0, 3000.0);
+    renderMatrixMode(RenderMatrixMode::ModelView);
+    renderLoadIdentity();
+    renderTranslate(0.0f, 0.0f, -2000.0f);
+    renderDisable(RenderCapability::Lighting);
+    renderDisable(RenderCapability::Fog);
+    renderDisable(RenderCapability::DepthTest);
+    renderDisable(RenderCapability::Blend);
+    renderEnable(RenderCapability::Texture2D);
+    renderEnable(RenderCapability::AlphaTest);
+    renderAlphaFunc(RenderCompare::Greater, 0.1f);
+    renderBindTexture(renderEngine->getTexture("/title/mojang.png"));
+    renderColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+    Tessellator::instance.setColorOpaque_I(0xffffff);
+    drawSplashScreenTexturedModalRect((displayWidth - 256) / 2, (displayHeight - 256) / 2, 0, 0, 256, 256);
+    renderEnable(RenderCapability::DepthTest);
+    lwjgl::Display::swapBuffers();
+    return;
+#endif
     ScaledResolution scaledresolution(gameSettings, displayWidth, displayHeight);
     renderClear(RenderClearMask::Color | RenderClearMask::Depth);
     renderMatrixMode(RenderMatrixMode::Projection);
