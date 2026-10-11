@@ -8,6 +8,9 @@
 
 namespace PspGu
 {
+// Face culling is normally forced off on the GE; models that rely on it (the zero-thickness book
+// pages, whose front and back faces coincide) switch it on for their draw.
+inline bool g_honorCull = false;
 constexpr int kScreenWidth = 480;
 constexpr int kScreenHeight = 272;
 constexpr int kBufferWidth = 512;

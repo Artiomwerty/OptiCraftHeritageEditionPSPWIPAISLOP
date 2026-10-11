@@ -611,7 +611,7 @@ void applyState(bool meshLit)
     // Face culling stays off on the GE for now: the title log showed every GUI quad (cull enabled by
     // the game, with a y-flipped ortho projection) being rejected, so the front-face mapping needs a
     // calibration pass first. Depth testing keeps the picture correct meanwhile.
-    applyToggle(g_a.cull, false, GU_CULL_FACE);
+    applyToggle(g_a.cull, PspGu::g_honorCull && g_s.cull, GU_CULL_FACE);
 
     const unsigned bkey = (static_cast<unsigned>(g_s.blendSrc) << 8) | static_cast<unsigned>(g_s.blendDst);
     if (bkey != g_a.blendKey)

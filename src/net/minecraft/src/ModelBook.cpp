@@ -5,6 +5,11 @@
 
 #include <cmath>
 
+#include "platform/RenderAPI.h"
+#if defined(PSP_PLATFORM)
+#include "psp/render/PspGuDevice.h"
+#endif
+
 ModelBook::ModelBook()
     : coverRight(new ModelRenderer(0, 0))
     , coverLeft(new ModelRenderer(16, 0))
@@ -41,6 +46,10 @@ ModelBook::~ModelBook()
 void ModelBook::render(float time, float flipRight, float flipLeft, float open, float yaw, float scale)
 {
     setRotationAngles(time, flipRight, flipLeft, open, yaw, scale);
+#if defined(PSP_PLATFORM)
+    PspGu::g_honorCull = true;
+    renderEnable(RenderCapability::CullFace);
+#endif
     coverRight->render(scale);
     coverLeft->render(scale);
     bookSpine->render(scale);
@@ -48,6 +57,10 @@ void ModelBook::render(float time, float flipRight, float flipLeft, float open, 
     pagesLeft->render(scale);
     flippingPageRight->render(scale);
     flippingPageLeft->render(scale);
+#if defined(PSP_PLATFORM)
+    PspGu::g_honorCull = false;
+    renderDisable(RenderCapability::CullFace);
+#endif
 }
 
 void ModelBook::setRotationAngles(float time, float flipRight, float flipLeft, float open, float, float)
