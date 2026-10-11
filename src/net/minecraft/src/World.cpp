@@ -3446,6 +3446,10 @@ void World::updateEntities()
     platformPhaseStartNs = System::nanoTime();
 #endif
 
+#if PLATFORM_PSP
+    static unsigned pspEntityTickCounterStorage = 0;
+    const unsigned pspEntityTickCounter = pspEntityTickCounterStorage++;
+#endif
     // Update loaded entities
     for (size_t l = 0; l < loadedEntityList.size(); l++)
     {
@@ -3462,7 +3466,33 @@ void World::updateEntities()
             entity->ridingEntity = nullptr;
         }
         
-        if (!entity->isDead)
+#if PLATFORM_PSP
+        // Distance-based tick rate for non-player mobs: >= 7 chunks away 15 ticks/s, >= 16 chunks away 9 ticks/s.
+        bool pspSkipTick = false;
+        if (!entity->isDead && !playerEntities.empty() && dynamic_cast<EntityLiving*>(entity) != nullptr &&
+            dynamic_cast<EntityPlayer*>(entity) == nullptr)
+        {
+            double best = 1.0e30;
+            for (EntityPlayer *pl : playerEntities)
+            {
+                if (pl == nullptr) continue;
+                const double ddx = std::fabs(pl->posX - entity->posX), ddz = std::fabs(pl->posZ - entity->posZ);
+                const double dd = ddx > ddz ? ddx : ddz;
+                if (dd < best) best = dd;
+            }
+            const int rate = best >= 256.0 ? 9 : (best >= 112.0 ? 15 : 20);
+            if (rate < 20)
+            {
+                const unsigned t = pspEntityTickCounter + (unsigned)entity->entityId;
+                pspSkipTick = ((t + 1u) * (unsigned)rate / 20u) == (t * (unsigned)rate / 20u);
+            }
+        }
+#endif
+        if (!entity->isDead
+#if PLATFORM_PSP
+            && !pspSkipTick
+#endif
+            )
         {
 #if PLATFORM_PS2 && MC_LOG_LEVEL >= 2
             const std::uint32_t entityTickStart = platformProfileRenderPhaseBegin();
