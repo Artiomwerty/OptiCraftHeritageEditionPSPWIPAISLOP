@@ -2273,8 +2273,10 @@ void Minecraft::runTick()
     }
     else
     {
+#if !PLATFORM_PSP // PSP: no menu music
         if (sndManager != nullptr)
             sndManager->playRandomMusicIfReady();
+#endif
     }
 
     systemTime = System::currentTimeMillis();

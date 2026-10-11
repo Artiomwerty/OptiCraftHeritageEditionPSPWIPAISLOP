@@ -278,8 +278,10 @@ void GuiMainMenu::initGui()
         else if (month == 1  && day == 1)  splashText = "Happy new year!";
     }
 
+#if !PLATFORM_PSP // PSP: no title screen music
     if (mc != nullptr && mc->sndManager != nullptr)
         mc->sndManager->playRandomMusicIfReady();
+#endif
 
     StringTranslate *tr = StringTranslate::getInstance();
     if (mc->gameSettings != nullptr && mc->gameSettings->legacyUI)

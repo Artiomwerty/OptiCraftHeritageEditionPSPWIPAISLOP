@@ -1476,6 +1476,7 @@ void EntityRenderer::updateCameraAndRender(float partialTicks)
         
         setupOverlayRendering();
         
+#if !PLATFORM_PSP // PSP: the frame pacer in present() already locks the rate; no extra sleep in menus
         if (mc->gameSettings->limitFramerate == 2)
         {
             int64_t sleepTime = (field_28133_I + (int64_t)(1000000000LL / limitFps) - 
@@ -1493,6 +1494,7 @@ void EntityRenderer::updateCameraAndRender(float partialTicks)
             }
         }
         
+#endif
         field_28133_I = std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now().time_since_epoch()).count();
     }
