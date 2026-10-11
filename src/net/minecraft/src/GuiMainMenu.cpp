@@ -356,7 +356,11 @@ void GuiMainMenu::drawPanorama(int_t, int_t, float_t partialTick, float_t aspect
     renderMatrixMode(RenderMatrixMode::Projection);
     renderPushMatrix();
     renderLoadIdentity();
+#if PLATFORM_PSP
+    setPerspective(100.0f, aspectRatio, 0.1f, 10.0f);
+#else
     setPerspective(120.0f, aspectRatio, 0.05f, 10.0f);
+#endif
     renderMatrixMode(RenderMatrixMode::ModelView);
     renderPushMatrix();
     renderLoadIdentity();
@@ -394,10 +398,31 @@ void GuiMainMenu::drawPanorama(int_t, int_t, float_t partialTick, float_t aspect
                 "/title/bg/panorama" + std::to_string(face) + ".png"));
             tess->startDrawingQuads();
             tess->setColorRGBA_I(0xffffff, 255 / (sample + 1));
+#if PLATFORM_PSP
+            // The PSP GE does not clip: any triangle crossing the near plane or
+            // the screen guard band is dropped.  Split each face into a grid so
+            // only tiny off-screen cells are lost instead of whole wedges.
+            {
+                const int_t n = 8;
+                for (int_t gy = 0; gy < n; ++gy)
+                    for (int_t gx = 0; gx < n; ++gx)
+                    {
+                        const double x0 = -1.0 + 2.0 * gx / n, x1 = -1.0 + 2.0 * (gx + 1) / n;
+                        const double y0 = -1.0 + 2.0 * gy / n, y1 = -1.0 + 2.0 * (gy + 1) / n;
+                        const double u0 = static_cast<double>(gx) / n, u1 = static_cast<double>(gx + 1) / n;
+                        const double v0 = static_cast<double>(gy) / n, v1 = static_cast<double>(gy + 1) / n;
+                        tess->addVertexWithUV(x0, y0, 1.0, u0, v0);
+                        tess->addVertexWithUV(x1, y0, 1.0, u1, v0);
+                        tess->addVertexWithUV(x1, y1, 1.0, u1, v1);
+                        tess->addVertexWithUV(x0, y1, 1.0, u0, v1);
+                    }
+            }
+#else
             tess->addVertexWithUV(-1.0, -1.0, 1.0, 0.0, 0.0);
             tess->addVertexWithUV(1.0, -1.0, 1.0, 1.0, 0.0);
             tess->addVertexWithUV(1.0, 1.0, 1.0, 1.0, 1.0);
             tess->addVertexWithUV(-1.0, 1.0, 1.0, 0.0, 1.0);
+#endif
             tess->draw();
             renderPopMatrix();
         }
