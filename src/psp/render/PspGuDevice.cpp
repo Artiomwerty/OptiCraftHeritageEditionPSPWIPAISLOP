@@ -124,9 +124,11 @@ bool oskEdit(const std::string &initial, const char *desc, int limit, std::strin
     // Close the frame in progress; the system dialog draws over a plain background.
     sceGuFinish();
     sceGuSync(0, 0);
-    PspSystem::bootTrace("osk: init -> %d", sceUtilityOskInitStart(&params));
-    bool done = false;
-    int guard = 0;
+    const int initRc = sceUtilityOskInitStart(&params);
+    PspSystem::bootTrace("osk: init -> 0x%08x\n", (unsigned)initRc);
+    bool done = initRc < 0;
+    int guard = 0, lastStatus = -1, visibleSeen = 0;
+    const std::uint64_t startUs = PspSystem::micros();
     while (!done && guard++ < 60 * 60 * 10)
     {
         sceGuStart(GU_DIRECT, g_list);
@@ -136,20 +138,38 @@ bool oskEdit(const std::string &initial, const char *desc, int limit, std::strin
         sceGuClear(GU_COLOR_BUFFER_BIT | GU_DEPTH_BUFFER_BIT);
         sceGuFinish();
         sceGuSync(0, 0);
-        switch (sceUtilityOskGetStatus())
+        const int status = sceUtilityOskGetStatus();
+        if (status != lastStatus)
         {
-        case PSP_UTILITY_OSK_DIALOG_VISIBLE: sceUtilityOskUpdate(1); break;
+            lastStatus = status;
+            PspSystem::bootTrace("osk: status %d\n", status);
+        }
+        switch (status)
+        {
+        case PSP_UTILITY_OSK_DIALOG_VISIBLE: visibleSeen = 1; sceUtilityOskUpdate(1); break;
         case PSP_UTILITY_OSK_DIALOG_QUIT: sceUtilityOskShutdownStart(); break;
         case PSP_UTILITY_OSK_DIALOG_NONE: done = true; break;
         default: break;
         }
+        // Never trap the player: if the dialog has not shown up after 4 s, give up.
+        if (!visibleSeen && PspSystem::micros() - startUs > 4000000ull)
+        {
+            PspSystem::bootTrace("osk: never became visible (status %d), giving up\n", status);
+            sceUtilityOskShutdownStart();
+            for (int i = 0; i < 120 && sceUtilityOskGetStatus() != PSP_UTILITY_OSK_DIALOG_NONE; ++i)
+            {
+                if (sceUtilityOskGetStatus() == PSP_UTILITY_OSK_DIALOG_QUIT) sceUtilityOskShutdownStart();
+                sceDisplayWaitVblankStart();
+            }
+            done = true;
+        }
         sceDisplayWaitVblankStart();
         sceGuSwapBuffers();
     }
-    const bool changed = data.result == PSP_UTILITY_OSK_RESULT_CHANGED;
+    const bool changed = initRc >= 0 && data.result == PSP_UTILITY_OSK_RESULT_CHANGED;
     if (changed)
         out = utf16ToUtf8(sOut);
-    PspSystem::bootTrace("osk: done result=%d", data.result);
+    PspSystem::bootTrace("osk: done result=%d\n", data.result);
 
     // Back to the game: re-send GE state and open the next list.
     sceGuStart(GU_DIRECT, g_list);
