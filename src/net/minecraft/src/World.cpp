@@ -4851,11 +4851,8 @@ void World::tick()
     if (i != skylightSubtracted)
     {
         skylightSubtracted = i;
-#if !defined(PSP_PLATFORM)
-        // PSP re-meshes via EntityRenderer's daylight bucket (the baked lightmap), not per skylight step.
         for (size_t j = 0; j < worldAccesses.size(); j++)
             worldAccesses[j]->updateAllRenderers();
-#endif
     }
 
     const long_t time = JavaArithmetic::longAdd(worldInfo->getWorldTime(), 1LL);

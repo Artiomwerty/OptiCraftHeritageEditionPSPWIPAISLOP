@@ -153,7 +153,7 @@ private:
 #if PLATFORM_PC_LEGACY
     PcLegacyLightmapCache* pcLegacyLightmapCache;
 #endif
-#if defined(PS2_PLATFORM) || defined(PSP_PLATFORM)
+#if defined(PS2_PLATFORM)
     int ps2TerrainLightBucket;
     bool ps2TerrainLightningActive;
 #endif

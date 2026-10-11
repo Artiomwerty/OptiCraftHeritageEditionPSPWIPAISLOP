@@ -68,12 +68,12 @@ void bootTrace(const char *fmt, ...)
     if (lines >= 1500)
         return;
     ++lines;
-    char msg[560];
+    char msg[300];
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(msg, sizeof(msg), fmt, ap);
     va_end(ap);
-    char line[600];
+    char line[340];
     const int n = snprintf(line, sizeof(line), "%8u ms  %s", (unsigned)millis(), msg);
     if (n <= 0)
         return;

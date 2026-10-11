@@ -33,11 +33,11 @@ namespace PspProfile
 {
 void dump()
 {
-    char line[520];
+    char line[420];
     int n = std::snprintf(line, sizeof(line), "phases(ms/window):");
     for (int i = 0; i < g_count && n < (int)sizeof(line) - 40; ++i)
     {
-        if (g_slots[i].ns < 1000000) // < 0.2 ms: not interesting
+        if (g_slots[i].ns < 200000) // < 0.2 ms: not interesting
             continue;
         n += std::snprintf(line + n, sizeof(line) - n, " %s=%lld(%u)", g_slots[i].name, g_slots[i].ns / 1000000, g_slots[i].calls);
     }
