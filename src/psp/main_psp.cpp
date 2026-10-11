@@ -19,7 +19,7 @@ int main(int argc, char **argv)
 {
 	PspSystem::setAppDirFromArgv0(argc > 0 ? argv[0] : nullptr);
 	scePowerSetClockFrequency(333, 333, 166);
-	PspSystem::bootTrace("main: appDir=%s\n", PspSystem::appDir().c_str());
+	PspSystem::bootTrace("main: argv0=%s appDir=%s\n", (argc > 0 && argv[0]) ? argv[0] : "(null)", PspSystem::appDir().c_str());
 
 	lwjgl::GLContext::instantiate();
 	Tessellator::convertQuadsToTriangles = true;
