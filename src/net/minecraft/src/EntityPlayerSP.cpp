@@ -1,3 +1,4 @@
+#include <cmath>
 #include "EntityPlayerSP.h"
 
 #include "GameSettings.h"
@@ -234,6 +235,28 @@ void EntityPlayerSP::onLivingUpdate()
 			motionY += 0.15;
 	}
 
+#if PLATFORM_PSP
+	// Auto jump: walking into a one-block ledge hops up it (only if there is room to land).
+	if (movementInput != nullptr && onGround && isCollidedHorizontally && !capabilities.isFlying &&
+		!movementInput->sneak && !movementInput->jump &&
+		(movementInput->moveForward > 0.1f || movementInput->moveForward < -0.1f ||
+		 movementInput->moveStrafe > 0.1f || movementInput->moveStrafe < -0.1f))
+	{
+		const double yaw = (double)rotationYaw * 3.14159265358979 / 180.0;
+		const double sn = std::sin(yaw), cs = std::cos(yaw);
+		double dx = -sn * movementInput->moveForward + cs * movementInput->moveStrafe;
+		double dz = cs * movementInput->moveForward + sn * movementInput->moveStrafe;
+		const double len = std::sqrt(dx * dx + dz * dz);
+		if (len > 0.0001)
+		{
+			dx /= len;
+			dz /= len;
+			const double reach = (double)width * 0.5 + 0.1;
+			if (worldObj->getCollidingBoundingBoxes(this, boundingBox->getOffsetBoundingBox(dx * reach, 1.01, dz * reach)).empty())
+				movementInput->jump = true;
+		}
+	}
+#endif
 	EntityPlayer::onLivingUpdate();
 	if (onGround && capabilities.isFlying)
 	{
