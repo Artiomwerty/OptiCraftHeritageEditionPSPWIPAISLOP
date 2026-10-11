@@ -5,6 +5,8 @@
 #include <pspgu.h>
 #include <pspkernel.h>
 #include <psputils.h>
+extern std::size_t pspGeomBytes;
+extern int pspGeomCount;
 #include <psputility.h>
 
 #include <cstring>
@@ -257,7 +259,9 @@ void present()
                                  (unsigned)(workSum / 120), g_prof.tick / 120, g_prof.light / 120, g_prof.render / 120,
                                  g_prof.display / 120, (unsigned)(geSum / 120),
                                  g_stats.lastDrawCalls, g_stats.lastVertices, g_prof.gui, g_prof.world / 120, g_prof.overlay / 120, g_prof.clear / 120, g_prof.screen / 120);
-            { const struct mallinfo mi = mallinfo(); PspSystem::bootTrace("mem: heap used %u KB, arena %u KB, arenaDrops %u, sys free %u KB, max block %u KB\n", (unsigned)(mi.uordblks / 1024), (unsigned)(mi.arena / 1024), (unsigned)g_stats.arenaDrops, (unsigned)(sceKernelTotalFreeMemSize() / 1024), (unsigned)(sceKernelMaxFreeMemSize() / 1024)); }
+            { const struct mallinfo mi = mallinfo();
+            PspSystem::bootTrace("meshes: %d live, %u KB\n", pspGeomCount, (unsigned)(pspGeomBytes / 1024));
+            PspSystem::bootTrace("mem: heap used %u KB, arena %u KB, arenaDrops %u, sys free %u KB, max block %u KB\n", (unsigned)(mi.uordblks / 1024), (unsigned)(mi.arena / 1024), (unsigned)g_stats.arenaDrops, (unsigned)(sceKernelTotalFreeMemSize() / 1024), (unsigned)(sceKernelMaxFreeMemSize() / 1024)); }
             PspProfile::dump();
             g_prof = Prof();
             workSum = 0;

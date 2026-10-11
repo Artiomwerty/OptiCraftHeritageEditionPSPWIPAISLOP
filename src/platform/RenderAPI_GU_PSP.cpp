@@ -36,6 +36,9 @@
 
 using PspMath::Mat4;
 
+std::size_t pspGeomBytes = 0; // live persistent mesh bytes (diagnostics)
+int pspGeomCount = 0;
+
 namespace
 {
 // ------------------------------------------------------------------ constants ---
@@ -314,6 +317,7 @@ struct PackedGeom
     // in at record time; submit() re-colours a copy when the current colour differs.
     bool needsColor = false;
     std::uint32_t packedColor = 0xFFFFFFFFu;
+    std::uint32_t bytes = 0;
 };
 
 std::uint16_t *g_quadIndices = nullptr;
@@ -370,6 +374,7 @@ void geomRelease(PackedGeom *g)
     if (!g) return;
     if (--g->refs <= 0)
     {
+        if (g->bytes) { pspGeomBytes -= g->bytes; --pspGeomCount; }
         free(g->verts);
         delete g;
     }
@@ -810,6 +815,8 @@ PackedGeom *packPersistent(const RenderInterleavedMesh &mesh)
         free(g->verts);
         g->verts = aligned;
     }
+    g->bytes = static_cast<std::uint32_t>(used ? used : 16);
+    pspGeomBytes += g->bytes; ++pspGeomCount;
     sceKernelDcacheWritebackRange(g->verts, used);
     return g;
 }
