@@ -30,7 +30,10 @@ void setAppDirFromArgv0(const char *argv0)
     // work with a full "ms0:/..." directory and make it the current directory.
     if (g_appDir.find(':') == std::string::npos)
         g_appDir = std::string("ms0:") + (g_appDir.empty() || g_appDir[0] != '/' ? "/" : "") + g_appDir;
-    chdir(g_appDir.c_str());
+    const int rc = chdir(g_appDir.c_str());
+    char cwd[256] = "";
+    if (!getcwd(cwd, sizeof(cwd))) cwd[0] = 0;
+    bootTrace("setAppDir: chdir('%s')=%d cwd='%s'\n", g_appDir.c_str(), rc, cwd);
 }
 
 const std::string &appDir() { return g_appDir; }

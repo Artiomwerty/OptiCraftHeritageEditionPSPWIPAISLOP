@@ -317,14 +317,23 @@ Minecraft::Minecraft(int_t width, int_t height, bool flag) :
 {
     PLATFORM_BOOT_LOG(PLATFORM_BOOT_PREFIX " ctor: static init begin\n");
     Material::initialize();
+    PLATFORM_BOOT_LOG(PLATFORM_BOOT_PREFIX " ctor: after Material::initialize()\n");
     Block::initialize();
+    PLATFORM_BOOT_LOG(PLATFORM_BOOT_PREFIX " ctor: after Block::initialize()\n");
     ChunkBlockMap::initialize();
+    PLATFORM_BOOT_LOG(PLATFORM_BOOT_PREFIX " ctor: after ChunkBlockMap::initialize()\n");
     Item::initItems();
+    PLATFORM_BOOT_LOG(PLATFORM_BOOT_PREFIX " ctor: after Item::initItems()\n");
     WorldType::initialize();
+    PLATFORM_BOOT_LOG(PLATFORM_BOOT_PREFIX " ctor: after WorldType::initialize()\n");
     BiomeGenBase::initialize();
+    PLATFORM_BOOT_LOG(PLATFORM_BOOT_PREFIX " ctor: after BiomeGenBase::initialize()\n");
     AchievementList::initialize();
+    PLATFORM_BOOT_LOG(PLATFORM_BOOT_PREFIX " ctor: after AchievementList::initialize()\n");
     EnumOptionsMappingHelper::initialize();
+    PLATFORM_BOOT_LOG(PLATFORM_BOOT_PREFIX " ctor: after EnumOptionsMappingHelper::initialize()\n");
     Session::initialize();
+    PLATFORM_BOOT_LOG(PLATFORM_BOOT_PREFIX " ctor: after Session::initialize()\n");
     PLATFORM_BOOT_LOG(PLATFORM_BOOT_PREFIX " ctor: static init done, allocating subsystems\n");
 
     timer        = new Timer(20.0f);
