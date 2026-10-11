@@ -592,7 +592,22 @@ void applyState(bool meshLit)
     applyToggle(g_a.tex2d, g_s.tex2d, GU_TEXTURE_2D);
     applyToggle(g_a.blend, g_s.blend, GU_BLEND);
     applyToggle(g_a.alphaTest, g_s.alphaTest, GU_ALPHA_TEST);
-    applyToggle(g_a.depthTest, g_s.depthTest, GU_DEPTH_TEST);
+    {
+        // Flat 2D UI (orthographic projection, model-view with no rotation): every quad sits at the
+        // same z, and the GE's fixed-point depth interpolation then lets some triangles fail the
+        // depth test on real hardware (half-black buttons, missing triangles). Painter's order is
+        // already correct there, so skip the depth test. Rotated draws (block icons) keep it.
+        bool flat2d = false;
+        const Mat4 &pr = g_stacks[SlotProjection].cur();
+        const Mat4 &mv = g_stacks[SlotModelView].cur();
+        if (pr.m[11] == 0.0f)
+        {
+            const float e = 1e-4f;
+            auto z = [e](float v) { return v < e && v > -e; };
+            flat2d = z(mv.m[1]) && z(mv.m[2]) && z(mv.m[4]) && z(mv.m[6]) && z(mv.m[8]) && z(mv.m[9]);
+        }
+        applyToggle(g_a.depthTest, g_s.depthTest && !flat2d, GU_DEPTH_TEST);
+    }
     // Face culling stays off on the GE for now: the title log showed every GUI quad (cull enabled by
     // the game, with a y-flipped ortho projection) being rejected, so the front-face mapping needs a
     // calibration pass first. Depth testing keeps the picture correct meanwhile.
