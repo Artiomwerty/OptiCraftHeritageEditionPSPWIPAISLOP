@@ -1,17 +1,9 @@
 #include "platform/Input.h"
 
-#include "psp/input/PspInput.h"
-
 PlatformTextInputSnapshot platformTextInputSnapshot(int port)
 {
     (void)port;
-    PlatformTextInputSnapshot s;
-    s.connected = true;
-    unsigned h = 0, pr = 0;
-    PspInput::textSnapshot(h, pr);
-    s.held = h;
-    s.pressed = pr;
-    return s;
+    return {};
 }
 
 PlatformGamepadSnapshot platformGamepadSnapshot(int port)
@@ -49,8 +41,7 @@ void platformSetMenuCursor(int x, int y)
 
 const PlatformKeyboardHints& platformKeyboardHints()
 {
-    static const PlatformKeyboardHints hints = {
-        {"X:type  []:del  /\\:shift  Sel:space  Start:ok  O:close", nullptr, nullptr}, 1};
+    static const PlatformKeyboardHints hints;
     return hints;
 }
 
