@@ -1,11 +1,9 @@
 #pragma once
 
-#if defined(PS2_PLATFORM) || defined(WII_PLATFORM) || defined(PSP_PLATFORM)
+#if defined(PS2_PLATFORM) || defined(WII_PLATFORM)
 
 #if defined(PS2_PLATFORM)
 #include "platform/time.h"
-#elif defined(PSP_PLATFORM)
-#include "psp/system/PspSystem.h"
 #else
 #include <ogc/lwp_watchdog.h>
 #endif
@@ -23,8 +21,6 @@ inline int consoleInputNowMs()
 {
 #if defined(PS2_PLATFORM)
 	return (int)(getTimeS() * 1000.0f);
-#elif defined(PSP_PLATFORM)
-	return (int)PspSystem::millis();
 #else
 	return (int)ticks_to_millisecs(gettime());
 #endif

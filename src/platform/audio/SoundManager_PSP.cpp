@@ -189,61 +189,48 @@ void startVoice(const Sample *s, float volume)
 
 struct MusicStream
 {
-    std::string archive;
-    std::uint32_t offset = 0, size = 0;
     SceUID fd = -1; // opened by the game thread (path resolution is not thread-safe here)
+    std::uint32_t offset = 0, size = 0, filePos = 0;
     unsigned char *ring = nullptr;
-    volatile std::uint32_t rd = 0, wr = 0; // byte counters (monotonic)
-    volatile int eof = 0, stop = 0, mixerDone = 0;
-    std::uint32_t frac = 0;   // 16.16 position between music frames
-    std::int16_t last[2] = {0, 0}, next[2] = {0, 0};
+    std::uint32_t rd = 0, wr = 0; // byte counters (monotonic), touched only by the mixer once handed over
+    volatile int stop = 0;
+    bool eof = false;
     bool primed = false;
 };
 
 MusicStream *volatile g_musicCur = nullptr;  // owned by the mixer thread
 MusicStream *volatile g_musicNext = nullptr; // handed over by the game thread
-volatile int g_musicRunning = 0;             // 1 from start until the reader thread has finished
+volatile int g_musicRunning = 0;             // 1 from start until the mixer has released the stream
 
-int musicReaderThread(SceSize, void *argp)
+void musicRelease(MusicStream *m)
 {
-    MusicStream *ms = *static_cast<MusicStream **>(argp);
-    SceUID fd = ms->fd;
-    std::uint32_t filePos = 0;
-    if (fd >= 0)
-    {
-        sceIoLseek32(fd, static_cast<int>(ms->offset), PSP_SEEK_SET);
-        while (!ms->stop && filePos < ms->size)
-        {
-            const std::uint32_t used = ms->wr - ms->rd;
-            if (kRingBytes - used < kReadChunk)
-            {
-                sceKernelDelayThread(15000);
-                continue;
-            }
-            std::uint32_t want = std::min(kReadChunk, ms->size - filePos);
-            want &= ~3u;
-            if (!want) break;
-            const std::uint32_t at = ms->wr % kRingBytes;
-            want = std::min(want, kRingBytes - at);
-            const int got = sceIoRead(fd, ms->ring + at, want);
-            if (got <= 0) break;
-            filePos += static_cast<std::uint32_t>(got);
-            __sync_synchronize();
-            ms->wr += static_cast<std::uint32_t>(got) & ~3u;
-        }
-        sceIoClose(fd);
-    }
-    ms->eof = 1;
-    // Wait until the mixer has let go of the ring, then free it.
-    while (!ms->mixerDone && !ms->stop)
-        sceKernelDelayThread(20000);
-    if (ms->stop)
-        while (!ms->mixerDone)
-            sceKernelDelayThread(5000);
-    free(ms->ring);
-    delete ms;
+    if (m->fd >= 0) sceIoClose(m->fd);
+    free(m->ring);
+    delete m;
     g_musicRunning = 0;
-    return sceKernelExitDeleteThread(0);
+}
+
+// Reads from the Memory Stick on the mixer thread itself, a little each block: no second thread
+// to be starved or to starve the game, and the schedule is deterministic.
+void musicRefill(MusicStream *m, std::uint32_t maxBytes)
+{
+    if (m->eof || m->fd < 0) return;
+    while (maxBytes >= 4096)
+    {
+        const std::uint32_t used = m->wr - m->rd;
+        if (kRingBytes - used < 8192 || m->filePos >= m->size) break;
+        std::uint32_t want = std::min<std::uint32_t>(8192, m->size - m->filePos);
+        want &= ~3u;
+        if (!want) { m->eof = true; break; }
+        const std::uint32_t at = m->wr % kRingBytes;
+        want = std::min(want, kRingBytes - at);
+        const int got = sceIoRead(m->fd, m->ring + at, want);
+        if (got <= 0) { m->eof = true; break; }
+        m->filePos += static_cast<std::uint32_t>(got);
+        m->wr += static_cast<std::uint32_t>(got) & ~3u;
+        if (m->filePos >= m->size) m->eof = true;
+        maxBytes -= std::min<std::uint32_t>(maxBytes, static_cast<std::uint32_t>(got));
+    }
 }
 
 bool startMusic(const std::string &url)
@@ -254,27 +241,18 @@ bool startMusic(const std::string &url)
     if (!AssetPak::locate(AssetPak::keyOf(url), &off, &sz) || sz < 4096)
         return false;
     MusicStream *ms = new MusicStream();
-    ms->archive = AssetPak::archivePath();
-    ms->fd = sceIoOpen(ms->archive.c_str(), PSP_O_RDONLY, 0);
+    const std::string archive = AssetPak::archivePath();
+    ms->fd = sceIoOpen(archive.c_str(), PSP_O_RDONLY, 0);
     PspSystem::bootTrace("audio: music %s fd=%d off=%u size=%u", url.c_str(), (int)ms->fd, off, sz);
     if (ms->fd < 0) { delete ms; return false; }
+    sceIoLseek32(ms->fd, static_cast<int>(off), PSP_SEEK_SET);
     ms->offset = off;
     ms->size = sz;
     ms->ring = static_cast<unsigned char *>(malloc(kRingBytes));
     if (!ms->ring) { sceIoClose(ms->fd); delete ms; return false; }
     g_musicRunning = 1;
-    SceUID th = sceKernelCreateThread("music", musicReaderThread, 0x1a, 16 * 1024, THREAD_ATTR_USER, nullptr);
-    if (th < 0)
-    {
-        g_musicRunning = 0;
-        sceIoClose(ms->fd);
-        free(ms->ring);
-        delete ms;
-        return false;
-    }
+    __sync_synchronize();
     g_musicNext = ms;
-    MusicStream *arg = ms;
-    sceKernelStartThread(th, sizeof(arg), &arg);
     return true;
 }
 
@@ -342,20 +320,32 @@ int mixerThread(SceSize, void *)
         MusicStream *m = g_musicCur;
         if (m && (m->stop || (m->eof && m->wr == m->rd)))
         {
-            m->mixerDone = 1;
-            g_musicCur = m = nullptr;
+            g_musicCur = nullptr;
+            musicRelease(m);
+            m = nullptr;
         }
         if (!m && g_musicNext)
         {
-            g_musicCur = m = g_musicNext;
+            m = g_musicNext;
             g_musicNext = nullptr;
+            if (m->stop) { musicRelease(m); m = nullptr; }
+            else g_musicCur = m;
         }
         if (m)
         {
+            if (!m->primed)
+            {
+                // Fill most of the ring before the first sample so playback never starts dry.
+                for (int k = 0; k < 6 && !m->eof && (m->wr - m->rd) < 48 * 1024; ++k)
+                    musicRefill(m, 8192);
+                m->primed = true;
+            }
+            else
+                musicRefill(m, 8192);
             const int gain = static_cast<int>(std::min(1.0f, g_musicVolume) * 200.0f);
             for (int i = 0; i < kBlockFrames; ++i)
             {
-                // 22.05 kHz source straight into a 22.05 kHz output: one frame per output frame.
+                // 22.05 kHz source straight into the 22.05 kHz mix: one frame per mix frame.
                 std::int16_t f[2];
                 if (!musicPull(m, f)) break;
                 g_mix[i * 2] += (f[0] * gain) >> 8;

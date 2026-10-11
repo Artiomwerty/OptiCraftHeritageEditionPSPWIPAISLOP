@@ -10,7 +10,29 @@
 #include "java/String.h"
 #include "pc/lwjgl/Keyboard.h"
 #include "platform/RenderAPI.h"
-#if defined(PS2_PLATFORM) || defined(WII_PLATFORM) || defined(PSP_PLATFORM)
+#if defined(PSP_PLATFORM)
+#include "lwjgl/Keyboard.h"
+#include "psp/render/PspGuDevice.h"
+namespace { GuiTextField *g_pspFocused = nullptr; }
+
+// Opens the PSP system keyboard for the focused field and feeds the result back as typed
+// characters, so every screen sees it exactly like normal typing.
+bool pspEditFocusedTextField()
+{
+    GuiTextField *f = g_pspFocused;
+    if (f == nullptr || !f->isFocused)
+        return false;
+    std::string out;
+    if (!PspGu::oskEdit(f->getText(), "", f->getMaxStringLength(), out))
+        return true;
+    f->setText("");
+    for (unsigned char c : out)
+        if (c >= 32 && c < 127)
+            lwjgl::Keyboard::detail::pushChar(c);
+    return true;
+}
+#endif
+#if defined(PS2_PLATFORM) || defined(WII_PLATFORM)
 #include "VirtualKeyboard.h"
 #endif
 
@@ -46,6 +68,14 @@ GuiTextField::GuiTextField(GuiScreen *parent, FontRenderer *fontrenderer,
 int_t GuiTextField::textLength() const
 {
     return String::utf16Length(text);
+}
+
+GuiTextField::~GuiTextField()
+{
+#if defined(PSP_PLATFORM)
+    if (g_pspFocused == this)
+        g_pspFocused = nullptr;
+#endif
 }
 
 void GuiTextField::updateCursorCounter()
@@ -275,6 +305,13 @@ void GuiTextField::mouseClicked(int_t x, int_t y, int_t button)
     bool inside = x >= xPos && x < xPos + width && y >= yPos && y < yPos + height;
     if (canLoseFocus)
         setFocused(isEnabled && inside);
+#if defined(PSP_PLATFORM)
+    if (inside && isEnabled && button == 0 && isFocused)
+    {
+        pspEditFocusedTextField();
+        return;
+    }
+#endif
 
     if (isFocused && button == 0)
     {
@@ -388,9 +425,13 @@ void GuiTextField::setFocused(bool focused)
     if (focused && !isFocused)
         cursorCounter = 0;
     isFocused = focused;
+#if defined(PSP_PLATFORM)
+    if (focused) g_pspFocused = this;
+    else if (g_pspFocused == this) g_pspFocused = nullptr;
+#endif
     if (parentGuiScreen != nullptr)
         parentGuiScreen->notifyTextFieldFocus(this, focused);
-#if defined(PS2_PLATFORM) || defined(WII_PLATFORM) || defined(PSP_PLATFORM)
+#if defined(PS2_PLATFORM) || defined(WII_PLATFORM)
     VirtualKeyboard::instance().notifyFocus(this, focused);
 #endif
 }

@@ -14,6 +14,7 @@ public:
 	GuiTextField(GuiScreen *parent, FontRenderer *fontrenderer,
 	             int_t x, int_t y, int_t w, int_t h, const jstring &initialText);
 
+	~GuiTextField();
 	void updateCursorCounter();
 	void setText(const jstring &s);
 	const jstring &getText() const;

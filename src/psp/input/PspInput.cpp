@@ -11,8 +11,9 @@
 
 #include "lwjgl/Keyboard.h"
 #include "lwjgl/Mouse.h"
-#include "net/minecraft/src/VirtualKeyboard.h"
 #include "platform/Input.h"
+
+bool pspEditFocusedTextField(); // GuiTextField.cpp
 
 #include <pspctrl.h>
 #include <pspkernel.h>
@@ -167,10 +168,10 @@ void poll(bool inMenu)
 	g_textHeld = toText(raw.buttons);
 	g_textPressed = toText(pressed);
 
-	// On-screen keyboard owns the pad while a text field is focused.
-	if (inMenu && VirtualKeyboard::instance().isActive())
+	// Square in a menu with a focused text field opens the system keyboard.
+	if (inMenu && (pressed & PspControls::BTN_SQUARE) && pspEditFocusedTextField())
 	{
-		VirtualKeyboard::instance().tick();
+		g_prevBtn = 0;
 		return;
 	}
 

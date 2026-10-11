@@ -4,6 +4,7 @@
 // RenderAPI_GU_PSP.cpp.
 #include <cstddef>
 #include <cstdint>
+#include <string>
 
 namespace PspGu
 {
@@ -17,6 +18,10 @@ constexpr unsigned kVramSize = 0x200000 * 2;
 
 // Brings up the GE, clears both buffers, starts the first frame's command list.
 bool init();
+
+// System on-screen keyboard (the XMB one). Blocks until it closes; returns true and fills `out`
+// when the user confirmed a changed text. Must be called between frames (not mid-render).
+bool oskEdit(const std::string &initial, const char *desc, int limit, std::string &out);
 bool isInitialized();
 
 // Finishes the current list, waits for the GPU, waits for the pacer's vblank, flips, and starts
