@@ -59,7 +59,7 @@ bool SoundManager::loaded = false;
 namespace
 {
 constexpr int kOutRate = 22050;
-constexpr int kBlockFrames = 1024; // mix frames per block (multiple of 64): 2048 output frames = 46 ms
+constexpr int kBlockFrames = 1536; // mix frames per block (multiple of 64): 3072 output frames = 70 ms
 constexpr int kVoices = 8;
 constexpr std::size_t kMaxCacheBytes = 3 * 1024 * 1024;
 constexpr std::uint32_t kRingBytes = 128 * 1024;
@@ -224,7 +224,13 @@ void musicRefill(MusicStream *m, std::uint32_t maxBytes)
         if (!want) { m->eof = true; break; }
         const std::uint32_t at = m->wr % kRingBytes;
         want = std::min(want, kRingBytes - at);
+        const std::uint64_t rt0 = PspSystem::micros();
         const int got = sceIoRead(m->fd, m->ring + at, want);
+        {
+            static int slowLogged = 0;
+            const std::uint64_t dt = PspSystem::micros() - rt0;
+            if (dt > 20000 && slowLogged < 10) { ++slowLogged; PspSystem::bootTrace("audio: slow music read %u us", (unsigned)dt); }
+        }
         if (got <= 0) { m->eof = true; break; }
         m->filePos += static_cast<std::uint32_t>(got);
         m->wr += static_cast<std::uint32_t>(got) & ~3u;
@@ -349,7 +355,12 @@ int mixerThread(SceSize, void *)
             {
                 // 22.05 kHz source straight into the 22.05 kHz mix: one frame per mix frame.
                 std::int16_t f[2];
-                if (!musicPull(m, f)) break;
+                if (!musicPull(m, f))
+                {
+                    static int dry = 0;
+                    if (dry < 10 && !m->eof) { ++dry; PspSystem::bootTrace("audio: music ring dry (rd=%u wr=%u)", m->rd, m->wr); }
+                    break;
+                }
                 g_mix[i * 2] += (f[0] * gain) >> 8;
                 g_mix[i * 2 + 1] += (f[1] * gain) >> 8;
             }
@@ -379,7 +390,7 @@ int mixerThread(SceSize, void *)
             static int lateLogged = 0, blocks = 0;
             const std::uint64_t now = PspSystem::micros();
             ++blocks;
-            if (lastT && now - lastT > 60000 && lateLogged < 12 && blocks > 8)
+            if (lastT && now - lastT > 90000 && lateLogged < 12 && blocks > 8)
             {
                 ++lateLogged;
                 PspSystem::bootTrace("audio: late block %u us", (unsigned)(now - lastT));
