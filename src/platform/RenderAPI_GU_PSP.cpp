@@ -723,6 +723,24 @@ void submit(const PackedGeom &g)
     }
     const int vtype = GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D | (g.lit ? GU_NORMAL_8BIT : 0);
     const std::size_t vsize = PspPack::vertexBytes(g.lit);
+    if (PspGu::g_dbgTexSync) { sceGuTexFlush(); sceGuTexSync(); }
+    if (g.prim == PspPack::Prim::QuadsIndexed && PspGu::g_dbgNoIndex)
+    {
+        // Experiment (render.ini noindex=1): expand quads to a plain triangle list, no index buffer.
+        const int quads = g.vertexCount / 4;
+        unsigned char *tri = static_cast<unsigned char *>(PspGu::frameAlloc(static_cast<std::size_t>(quads) * 6 * vsize));
+        if (tri)
+        {
+            const unsigned char *srcv = static_cast<const unsigned char *>(vertsToDraw);
+            static const int order[6] = {0, 1, 2, 0, 2, 3};
+            for (int q = 0; q < quads; ++q)
+                for (int k = 0; k < 6; ++k)
+                    std::memcpy(tri + (static_cast<std::size_t>(q) * 6 + k) * vsize, srcv + (static_cast<std::size_t>(q) * 4 + order[k]) * vsize, vsize);
+            sceGuDrawArray(GU_TRIANGLES, vtype, quads * 6, nullptr, tri);
+            PspGu::countDraw(static_cast<unsigned>(g.vertexCount));
+            return;
+        }
+    }
     if (g.prim == PspPack::Prim::QuadsIndexed)
     {
         if (!ensureQuadIndices()) return;

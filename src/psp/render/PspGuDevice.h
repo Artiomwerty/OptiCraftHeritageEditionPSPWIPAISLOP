@@ -11,6 +11,10 @@ namespace PspGu
 // Face culling is normally forced off on the GE; models that rely on it (the zero-thickness book
 // pages, whose front and back faces coincide) switch it on for their draw.
 inline bool g_honorCull = false;
+// Rendering experiments, read from render.ini beside the EBOOT (all off = normal behaviour):
+//   noindex=1 draw quads as plain triangle lists, texsync=1 flush the texture cache before every draw,
+//   flush=1 write back the whole data cache each frame, noclip=1 leave GE clip planes off.
+inline bool g_dbgNoIndex = false, g_dbgTexSync = false, g_dbgFlushAll = false, g_dbgNoClip = false;
 constexpr int kScreenWidth = 480;
 constexpr int kScreenHeight = 272;
 constexpr int kBufferWidth = 512;

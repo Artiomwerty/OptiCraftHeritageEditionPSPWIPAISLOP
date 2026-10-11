@@ -79,7 +79,7 @@ void applyBaseGeState()
     sceGuEnable(GU_SCISSOR_TEST);
     sceGuFrontFace(GU_CW);
     sceGuShadeModel(GU_SMOOTH);
-    sceGuEnable(GU_CLIP_PLANES);
+    if (!PspGu::g_dbgNoClip) sceGuEnable(GU_CLIP_PLANES);
     ScePspFMatrix4 id = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}};
     sceGuSetMatrix(GU_VIEW, &id);
     sceGuSetMatrix(GU_MODEL, &id);
@@ -183,10 +183,32 @@ bool oskEdit(const std::string &initial, const char *desc, int limit, std::strin
     return changed;
 }
 
+// render.ini: tiny "key=1" text file so rendering experiments need no rebuild.
+static void loadRenderIni()
+{
+    char path[300];
+    std::snprintf(path, sizeof(path), "%s/render.ini", PspSystem::appDir().c_str());
+    SceUID fd = sceIoOpen(path, PSP_O_RDONLY, 0);
+    if (fd < 0)
+        return;
+    char buf[256];
+    const int n = sceIoRead(fd, buf, sizeof(buf) - 1);
+    sceIoClose(fd);
+    if (n <= 0)
+        return;
+    buf[n] = 0;
+    PspGu::g_dbgNoIndex = std::strstr(buf, "noindex=1") != nullptr;
+    PspGu::g_dbgTexSync = std::strstr(buf, "texsync=1") != nullptr;
+    PspGu::g_dbgFlushAll = std::strstr(buf, "flush=1") != nullptr;
+    PspGu::g_dbgNoClip = std::strstr(buf, "noclip=1") != nullptr;
+    PspSystem::bootTrace("render.ini: noindex=%d texsync=%d flush=%d noclip=%d\n", PspGu::g_dbgNoIndex, PspGu::g_dbgTexSync, PspGu::g_dbgFlushAll, PspGu::g_dbgNoClip);
+}
+
 bool init()
 {
     if (g_init)
         return true;
+    loadRenderIni();
     for (int i = 0; i < 2; ++i)
     {
         g_arena[i] = static_cast<unsigned char *>(memalign(64, kArenaBytes));
@@ -209,7 +231,7 @@ bool init()
     sceGuFrontFace(GU_CW);
     sceGuShadeModel(GU_SMOOTH);
     sceGuDisable(GU_DEPTH_TEST);
-    sceGuEnable(GU_CLIP_PLANES);
+    if (!g_dbgNoClip) sceGuEnable(GU_CLIP_PLANES);
     {
         // World/view matrices are not guaranteed to start as identity; the renderer only ever sets
         // the "model" and projection ones, so pin the others.
@@ -298,7 +320,7 @@ void present()
         return;
 
     // Make the CPU-written vertex data visible to the GE, then run the frame.
-    sceKernelDcacheWritebackRange(g_arena[g_arenaIndex], g_arenaUsed);
+    if (g_dbgFlushAll) sceKernelDcacheWritebackAll(); else sceKernelDcacheWritebackRange(g_arena[g_arenaIndex], g_arenaUsed);
     // Frame profile for boot.log: how long the CPU took to build the frame vs how long the GE
     // then needed to draw it (the two are not overlapped yet).
     static std::uint64_t lastEnd = 0, geSum = 0, frameSum = 0, workSum = 0, lastReturn = 0;
