@@ -6424,7 +6424,14 @@ bool World::isSafeToSave(int_t counter)
 {
     // Java func_650_a: this is not only a boolean check; it performs
     // incremental chunk saving while the pause menu shows "Saving level...".
+#if PLATFORM_PSP
+    // PSP: the world is saved when you quit (and on explicit save), not every frame of the pause menu.
+    // The incremental save wrote chunks to the Memory Stick while paused (about 70 ms per frame).
+    (void)counter;
+    return true;
+#else
     return saveAllChunks(counter);
+#endif
 }
 
 void World::isTrapdoorOpen(int_t i, int_t j, int_t k, int_t l, int_t i1)
