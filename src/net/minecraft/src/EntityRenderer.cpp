@@ -92,16 +92,23 @@
 #include "platform/Input.h"
 #endif
 
-#if defined(PS2_PLATFORM)
+#if defined(PS2_PLATFORM) || defined(PSP_PLATFORM)
 namespace
 {
     int ps2TerrainDaylightBucket(float daylight)
     {
         if (daylight <= 0.0f)
             return 0;
+#if defined(PSP_PLATFORM)
+        // Fewer steps on PSP: every step re-meshes the whole visible world, so keep dusk to ~8 rebuilds.
+        if (daylight >= 1.0f)
+            return 8;
+        return static_cast<int>(daylight * 8.0f + 0.5f);
+#else
         if (daylight >= 1.0f)
             return 15;
         return static_cast<int>(daylight * 15.0f + 0.5f);
+#endif
     }
 }
 #endif
@@ -335,7 +342,7 @@ EntityRenderer::EntityRenderer(Minecraft* minecraft)
     pcLegacyLightmapCache = nullptr;
 #  endif
 #endif
-#if defined(PS2_PLATFORM)
+#if defined(PS2_PLATFORM) || defined(PSP_PLATFORM)
     ps2TerrainLightBucket = -1;
     ps2TerrainLightningActive = false;
 #endif
@@ -370,7 +377,7 @@ void EntityRenderer::updateWorldLightLevels()
     if (pcLegacyLightmapCache != nullptr)
         pcLegacyLightmapCache->invalidate();
 #endif
-#if defined(PS2_PLATFORM)
+#if defined(PS2_PLATFORM) || defined(PSP_PLATFORM)
     ps2TerrainLightBucket = ps2TerrainDaylightBucket(mc->theWorld->func_35464_b(1.0f));
     ps2TerrainLightningActive = mc->theWorld->field_27172_i > 0;
     if (mc->renderGlobal != nullptr)
@@ -497,7 +504,7 @@ void EntityRenderer::updateLightmap()
     renderSetLightmapColors(reinterpret_cast<const std::uint32_t*>(lightmapColors.data()),
                             static_cast<int>(lightmapColors.size()));
 #endif
-#if defined(PS2_PLATFORM)
+#if defined(PS2_PLATFORM) || defined(PSP_PLATFORM)
     renderSetLightmapColors(reinterpret_cast<const std::uint32_t*>(lightmapColors.data()),
                             static_cast<int>(lightmapColors.size()));
 
