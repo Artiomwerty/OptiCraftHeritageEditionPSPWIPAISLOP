@@ -181,7 +181,7 @@ struct Texture
     std::size_t totalBytes = 0;     // all levels
 };
 
-constexpr int kAtlasMipLevels = 3;  // 256 -> 128 -> 64 (tiles 16 -> 8 -> 4 px): stops distant planks/grass shimmering; cutout alpha is re-binarised per level
+constexpr int kAtlasMipLevels = 1;  // 256 -> 128 -> 64 (tiles 16 -> 8 -> 4 px): stops distant planks/grass shimmering; cutout alpha is re-binarised per level
 
 inline std::size_t mipOffset(const Texture &t, int level)
 {

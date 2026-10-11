@@ -271,13 +271,15 @@ std::int32_t *g_mix = nullptr;
 
 bool musicPull(MusicStream *m, std::int16_t out[2])
 {
-    if (m->wr - m->rd < 4)
+    // The shipped .pcm tracks are MONO 22.05 kHz 16-bit (measured: adjacent samples are smooth, and
+    // piano1 runs 68 s = the real "Dry Hands"). Reading them as stereo played at double speed.
+    if (m->wr - m->rd < 2)
         return false;
     const std::uint32_t at = m->rd % kRingBytes;
-    const std::int16_t *p = reinterpret_cast<const std::int16_t *>(m->ring + at);
-    out[0] = p[0];
-    out[1] = p[1];
-    m->rd += 4;
+    const std::int16_t s = *reinterpret_cast<const std::int16_t *>(m->ring + at);
+    out[0] = s;
+    out[1] = s;
+    m->rd += 2;
     return true;
 }
 
