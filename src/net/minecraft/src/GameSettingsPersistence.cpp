@@ -368,8 +368,17 @@ void GameSettings::loadOptions()
 		ofClouds = 1;
 	legacyCrafting = true; // console-style crafting grid is the PSP default
 	legacyCreative = true; // console-style creative inventory is the PSP default
-	if (ofRenderDistanceFine > 36)
-		ofRenderDistanceFine = 36; // PSP cap: 2.25 chunks
+	{
+		// PSP steps: 2, 2.25, 2.75 and 3 chunks (default 2.25).
+		static const int_t steps[4] = {32, 36, 44, 48};
+		int_t best = 36, bestDiff = 1000;
+		for (int_t v : steps)
+		{
+			const int_t d = ofRenderDistanceFine > v ? ofRenderDistanceFine - v : v - ofRenderDistanceFine;
+			if (d < bestDiff) { bestDiff = d; best = v; }
+		}
+		ofRenderDistanceFine = best;
+	}
 	platformGameSettingsUpdateRenderDistanceFromFine(ofRenderDistanceFine, renderDistance);
 #endif
 	legacyGuiScaleRestore = legacyUiRestoreScaleAfterLoad(

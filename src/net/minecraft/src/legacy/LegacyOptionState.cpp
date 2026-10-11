@@ -41,7 +41,12 @@ float_t legacySmoothLightingToggleValue(float_t aoLevel)
 std::string legacyRenderDistanceLabel(int_t fineDistanceBlocks)
 {
     const int_t chunks = std::max<int_t>(1, fineDistanceBlocks / 16);
-    return uiText("Render Distance: ") + std::to_string(chunks);
+    const int_t rem = fineDistanceBlocks % 16;
+    std::string text = std::to_string(chunks);
+    if (rem == 4) text += ".25";
+    else if (rem == 8) text += ".5";
+    else if (rem == 12) text += ".75";
+    return uiText("Render Distance: ") + text;
 }
 
 std::string legacyFovLabel(float_t normalizedFov)

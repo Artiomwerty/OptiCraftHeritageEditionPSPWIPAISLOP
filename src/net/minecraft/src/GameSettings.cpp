@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include "platform/Log.h"
 #include "GameSettings.h"
 #include "UiStrings.h"
@@ -479,7 +480,18 @@ void GameSettings::setOptionFloatValue(const EnumOptions *enumoptions, float f)
     {
         const int_t maxRenderDistance = Config::getMaxRenderDistanceFine();
         int_t newDistance = 32 + (int_t)(f * (float)(maxRenderDistance - 32));
+#if defined(PSP_PLATFORM)
+        {
+            // PSP steps: 2, 2.25, 2.75 and 3 chunks.
+            static const int_t steps[4] = {32, 36, 44, 48};
+            int_t best = steps[0];
+            for (int_t v : steps)
+                if (std::abs(v - newDistance) < std::abs(best - newDistance)) best = v;
+            newDistance = best;
+        }
+#else
         newDistance = (newDistance >> 4) << 4;
+#endif
         newDistance = Config::limit(newDistance, 32, maxRenderDistance);
         if (newDistance != ofRenderDistanceFine)
         {
