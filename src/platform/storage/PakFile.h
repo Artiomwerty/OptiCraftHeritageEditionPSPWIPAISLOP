@@ -28,7 +28,7 @@ public:
     bool readAt(std::uint32_t offset, void *dst, std::uint32_t length);
 
 private:
-#if PLATFORM_PS2
+#if PLATFORM_PS2 || PLATFORM_PSP
     int fd_;
 #endif
     std::FILE *file_;

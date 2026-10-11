@@ -134,6 +134,63 @@ bool PakFile::readAt(std::uint32_t offset, void *dst, std::uint32_t length)
     return false;
 }
 
+#elif PLATFORM_PSP
+
+// PSP: raw sceIo, bypassing libc's path handling and stdio entirely (libc fopen of assets.pak failed
+// on some launches even though sceIoOpen on the same path works).
+#include <pspiofilemgr.h>
+
+PakFile::PakFile()
+    : fd_(-1), file_(nullptr)
+{
+}
+
+PakFile::~PakFile()
+{
+    close();
+}
+
+bool PakFile::open(const std::string &path)
+{
+    close();
+    const SceUID fd = sceIoOpen(path.c_str(), PSP_O_RDONLY, 0);
+    if (fd < 0)
+        return false;
+    fd_ = static_cast<int>(fd);
+    return true;
+}
+
+void PakFile::close()
+{
+    if (fd_ >= 0)
+        sceIoClose(static_cast<SceUID>(fd_));
+    fd_ = -1;
+}
+
+bool PakFile::isOpen() const
+{
+    return fd_ >= 0;
+}
+
+bool PakFile::readAt(std::uint32_t offset, void *dst, std::uint32_t length)
+{
+    if (fd_ < 0 || dst == nullptr)
+        return false;
+    if (sceIoLseek32(static_cast<SceUID>(fd_), static_cast<int>(offset), PSP_SEEK_SET) != static_cast<int>(offset))
+        return false;
+    unsigned char *out = static_cast<unsigned char *>(dst);
+    std::uint32_t remaining = length;
+    while (remaining > 0)
+    {
+        const int got = sceIoRead(static_cast<SceUID>(fd_), out, remaining);
+        if (got <= 0)
+            return false;
+        out += got;
+        remaining -= static_cast<std::uint32_t>(got);
+    }
+    return true;
+}
+
 #else
 
 PakFile::PakFile()
