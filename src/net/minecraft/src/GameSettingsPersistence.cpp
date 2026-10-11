@@ -368,8 +368,8 @@ void GameSettings::loadOptions()
 		ofClouds = 1;
 	legacyCrafting = true; // console-style crafting grid is the PSP default
 	legacyCreative = true; // console-style creative inventory is the PSP default
-	if (ofRenderDistanceFine == 48 || ofRenderDistanceFine > 48)
-		ofRenderDistanceFine = 40; // old default (3 chunks) -> 2.5 chunks
+	if (ofRenderDistanceFine > 36)
+		ofRenderDistanceFine = 36; // PSP cap: 2.25 chunks
 	platformGameSettingsUpdateRenderDistanceFromFine(ofRenderDistanceFine, renderDistance);
 #endif
 	legacyGuiScaleRestore = legacyUiRestoreScaleAfterLoad(

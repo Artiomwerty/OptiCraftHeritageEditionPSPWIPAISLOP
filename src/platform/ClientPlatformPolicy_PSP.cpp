@@ -57,7 +57,7 @@ void applyGameSettingsDefaults(GameSettings* settings)
     settings->ofDrippingWaterLava = false;
     settings->ofWeather = false;
     settings->legacyCrafting = true;
-    settings->ofRenderDistanceFine = 40; // ~2.5 chunks
+    settings->ofRenderDistanceFine = 36; // 2.25 chunks
     platformGameSettingsUpdateRenderDistanceFromFine(settings->ofRenderDistanceFine, settings->renderDistance);
     platformGameSettingsApplyLegacyCrafting(*settings);
 #ifdef PSP_NO_SKY
