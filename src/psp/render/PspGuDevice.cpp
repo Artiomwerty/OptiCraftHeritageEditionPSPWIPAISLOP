@@ -244,7 +244,10 @@ void present()
     unsigned waits = g_pacer.waitsNeeded(sceDisplayGetVcount());
     while (waits--)
         sceDisplayWaitVblankStart();
+    PspSystem::setStage("present: waiting for GE");
     sceGuSync(0, 0); // the frame must be complete before it is flipped to the screen
+    PspSystem::heartbeat();
+    PspSystem::setStage("after present");
     geSum += PspSystem::micros() - t1;
     g_pacer.presented(sceDisplayGetVcount());
     sceGuSwapBuffers();

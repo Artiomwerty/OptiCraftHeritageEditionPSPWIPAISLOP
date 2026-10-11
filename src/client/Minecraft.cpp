@@ -975,6 +975,9 @@ void Minecraft::run()
                     ticksRan++;
                     try
                     {
+#if PLATFORM_PSP
+                        PspSystem::setStage("runTick");
+#endif
                         runTick();
                     }
                     catch (const MinecraftException &)
@@ -1042,6 +1045,9 @@ void Minecraft::run()
                     const long_t clientRenderStartNs = System::nanoTime();
 #if PLATFORM_PSP
                     const std::uint64_t pspRenT0 = PspSystem::micros();
+#endif
+#if PLATFORM_PSP
+                    PspSystem::setStage("updateCameraAndRender");
 #endif
                     entityRenderer->updateCameraAndRender(timer->renderPartialTicks);
 #if PLATFORM_PSP

@@ -102,5 +102,29 @@ static void crashHandler(PspDebugRegBlock *r)
 }
 void installCrashHandler() { pspDebugInstallErrorHandler(crashHandler); }
 
+static volatile const char *g_stage = "boot";
+static volatile unsigned g_beat = 0;
+void setStage(const char *s) { g_stage = s; }
+void heartbeat() { ++g_beat; }
+static int watchdogMain(SceSize, void *)
+{
+    unsigned last = g_beat;
+    int stalled = 0;
+    for (;;)
+    {
+        sceKernelDelayThread(1000 * 1000);
+        if (g_beat != last) { last = g_beat; stalled = 0; continue; }
+        if (++stalled == 4)
+            bootTrace("WATCHDOG: no frame for 4 s, stage=%s freeMem=%u maxBlock=%u\n", (const char *)g_stage,
+                      (unsigned)sceKernelTotalFreeMemSize(), (unsigned)sceKernelMaxFreeMemSize());
+    }
+    return 0;
+}
+void startWatchdog()
+{
+    SceUID t = sceKernelCreateThread("watchdog", watchdogMain, 0x10, 4096, 0, nullptr);
+    if (t >= 0) sceKernelStartThread(t, 0, nullptr);
+}
+
 void exitGame() { sceKernelExitGame(); }
 }
