@@ -232,6 +232,9 @@ bool Config::isWaterFancy()
 
 bool Config::isCloudsFancy()
 {
+#if PLATFORM_PSP
+	return false; // flat 2D clouds only
+#endif
 	if (gameSettings->ofClouds == 0)
 		return gameSettings->fancyGraphics;
 	return gameSettings->ofClouds == 2;

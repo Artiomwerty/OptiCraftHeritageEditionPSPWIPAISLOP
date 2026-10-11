@@ -1003,6 +1003,34 @@ bool renderTextureIsValid(int texture)
            g_textures[static_cast<std::size_t>(texture)].created;
 }
 
+// Grass tiles are high-contrast per-pixel noise; without mipmaps they shimmer badly on a 480x272
+// screen. Pull each texel 60% toward the tile's mean colour (alpha untouched) so the texture is calm.
+void softenGrassTile(Texture &t, int tileIndex)
+{
+    const int ts = t.tw / 16;
+    if (ts < 4) return;
+    const int x0 = (tileIndex % 16) * ts, y0 = (tileIndex / 16) * ts;
+    unsigned sr = 0, sg = 0, sb = 0, n = 0;
+    for (int y = 0; y < ts; ++y)
+        for (int x = 0; x < ts; ++x)
+        {
+            const std::uint32_t c = t.pixels[static_cast<std::size_t>(y0 + y) * t.tw + x0 + x];
+            if ((c >> 24) == 0) continue;
+            sr += c & 255; sg += (c >> 8) & 255; sb += (c >> 16) & 255; ++n;
+        }
+    if (!n) return;
+    const int mr = sr / n, mg = sg / n, mb = sb / n;
+    for (int y = 0; y < ts; ++y)
+        for (int x = 0; x < ts; ++x)
+        {
+            std::uint32_t &c = t.pixels[static_cast<std::size_t>(y0 + y) * t.tw + x0 + x];
+            if ((c >> 24) == 0) continue;
+            const int r = (c & 255), g = (c >> 8) & 255, b = (c >> 16) & 255;
+            const int nr = r + (mr - r) * 6 / 10, ng = g + (mg - g) * 6 / 10, nb = b + (mb - b) * 6 / 10;
+            c = (c & 0xFF000000u) | (static_cast<std::uint32_t>(nb) << 16) | (static_cast<std::uint32_t>(ng) << 8) | static_cast<std::uint32_t>(nr);
+        }
+}
+
 void renderTextureImageRgba(int level, int width, int height, const void *pixels)
 {
     if (level != 0) return; // no mipmaps yet
@@ -1013,6 +1041,11 @@ void renderTextureImageRgba(int level, int width, int height, const void *pixels
     for (int y = 0; y < h; ++y)
         std::memcpy(reinterpret_cast<unsigned char *>(t->pixels) + static_cast<std::size_t>(y) * t->tw * 4,
                     src + static_cast<std::size_t>(y) * width * 4, static_cast<std::size_t>(w) * 4);
+    if (t->atlas && t->tw == 256 && t->th == 256)
+    {
+        softenGrassTile(*t, 0);  // grass top
+        softenGrassTile(*t, 38); // grass side overlay
+    }
     sceKernelDcacheWritebackRange(t->pixels, static_cast<std::size_t>(t->tw) * t->th * 4);
     mirrorToVram(*t, 0, t->th);
     rebuildMips(*t, 0, 0, t->tw, t->th);

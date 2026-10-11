@@ -236,6 +236,14 @@ void EntityPlayerSP::onLivingUpdate()
 	}
 
 #if PLATFORM_PSP
+	// Auto swim-up: pressing into a shore block while in water climbs out onto land.
+	if (movementInput != nullptr && isCollidedHorizontally && isInWater() && !capabilities.isFlying &&
+		!movementInput->sneak && !movementInput->jump &&
+		(movementInput->moveForward > 0.1f || movementInput->moveForward < -0.1f ||
+		 movementInput->moveStrafe > 0.1f || movementInput->moveStrafe < -0.1f))
+		movementInput->jump = true;
+#endif
+#if PLATFORM_PSP
 	// Auto jump: walking into a one-block ledge hops up it (only if there is room to land).
 	if (movementInput != nullptr && onGround && isCollidedHorizontally && !capabilities.isFlying &&
 		!movementInput->sneak && !movementInput->jump &&
