@@ -142,7 +142,11 @@ void GameSettings::setDefaults()
     legacyUI = legacyUiDefaultEnabled();
     legacyLook = legacyLookDefaultEnabled();
     legacyCrafting = false;
+#if PLATFORM_PSP
+    legacyCreative = true; // PSP default: console-style creative inventory
+#else
     legacyCreative = false;
+#endif
     alternativeControllerLayout = false;
     controllerDeadzone = 0.20f;
     wiiDeflicker = true;
