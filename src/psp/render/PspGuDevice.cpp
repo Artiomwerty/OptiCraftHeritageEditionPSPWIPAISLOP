@@ -12,6 +12,7 @@
 
 #include "psp/PspFramePacer.h"
 #include "psp/system/PspSystem.h"
+namespace PspProfile { void dump(); }
 
 namespace
 {
@@ -257,6 +258,7 @@ void present()
                                  g_prof.display / 120, (unsigned)(geSum / 120),
                                  g_stats.lastDrawCalls, g_stats.lastVertices, g_prof.gui, g_prof.world / 120, g_prof.overlay / 120, g_prof.clear / 120, g_prof.screen / 120);
             { const struct mallinfo mi = mallinfo(); PspSystem::bootTrace("mem: heap used %u KB, arena %u KB, arenaDrops %u\n", (unsigned)(mi.uordblks / 1024), (unsigned)(mi.arena / 1024), (unsigned)g_stats.arenaDrops); }
+            PspProfile::dump();
             g_prof = Prof();
             workSum = 0;
         profFrames = 0; geSum = 0; frameSum = 0;
