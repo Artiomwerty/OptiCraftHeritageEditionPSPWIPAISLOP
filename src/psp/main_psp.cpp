@@ -40,8 +40,7 @@ int main(int argc, char **argv)
 {
 	PspSystem::setAppDirFromArgv0(argc > 0 ? argv[0] : nullptr);
 	PspSystem::installCrashHandler();
-	PspSystem::startWatchdog();
-	PspSystem::bootTrace("build: test72 %s %s\n", __DATE__, __TIME__);
+	PspSystem::bootTrace("build: test73 %s %s\n", __DATE__, __TIME__);
 	const int clockRc = scePowerSetClockFrequency(333, 333, 166);
 	PspSystem::bootTrace("clock: set rc=%d now cpu=%d bus=%d\n", clockRc, scePowerGetCpuClockFrequency(), scePowerGetBusClockFrequency());
 	PspSystem::bootTrace("main: argv0=%s appDir=%s\n", (argc > 0 && argv[0]) ? argv[0] : "(null)", PspSystem::appDir().c_str());
