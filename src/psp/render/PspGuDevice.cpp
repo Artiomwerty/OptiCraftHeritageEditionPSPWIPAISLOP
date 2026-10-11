@@ -146,9 +146,9 @@ bool oskEdit(const std::string &initial, const char *desc, int limit, std::strin
         }
         switch (status)
         {
-        case PSP_UTILITY_OSK_DIALOG_VISIBLE: visibleSeen = 1; sceUtilityOskUpdate(1); break;
-        case PSP_UTILITY_OSK_DIALOG_QUIT: sceUtilityOskShutdownStart(); break;
-        case PSP_UTILITY_OSK_DIALOG_NONE: done = true; break;
+        case 2: /* visible (real firmware numbering) */ visibleSeen = 1; sceUtilityOskUpdate(1); break;
+        case 3: /* quit */ sceUtilityOskShutdownStart(); break;
+        case 0: done = true; break;
         default: break;
         }
         // Never trap the player: if the dialog has not shown up after 4 s, give up.
@@ -156,9 +156,9 @@ bool oskEdit(const std::string &initial, const char *desc, int limit, std::strin
         {
             PspSystem::bootTrace("osk: never became visible (status %d), giving up\n", status);
             sceUtilityOskShutdownStart();
-            for (int i = 0; i < 120 && sceUtilityOskGetStatus() != PSP_UTILITY_OSK_DIALOG_NONE; ++i)
+            for (int i = 0; i < 120 && sceUtilityOskGetStatus() != 0; ++i)
             {
-                if (sceUtilityOskGetStatus() == PSP_UTILITY_OSK_DIALOG_QUIT) sceUtilityOskShutdownStart();
+                if (sceUtilityOskGetStatus() == 3) sceUtilityOskShutdownStart();
                 sceDisplayWaitVblankStart();
             }
             done = true;
