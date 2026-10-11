@@ -1,7 +1,9 @@
 #include "psp/render/PspGuDevice.h"
 
 #include <malloc.h>
+#include <pspctrl.h>
 #include <pspdisplay.h>
+#include <pspiofilemgr.h>
 #include <pspgu.h>
 #include <pspkernel.h>
 #include <psputils.h>
@@ -232,6 +234,64 @@ bool init()
 
 bool isInitialized() { return g_init; }
 
+// Screenshot: hold L + R + SELECT. Saves the frame just shown as shotNN.bmp next to the EBOOT (max 8 per
+// run) so rendering glitches can be inspected exactly. Costs nothing unless the combo is held.
+static void maybeScreenshot()
+{
+    static bool prevCombo = false;
+    static int shots = 0;
+    SceCtrlData pad;
+    if (sceCtrlPeekBufferPositive(&pad, 1) <= 0)
+        return;
+    const unsigned combo = PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER | PSP_CTRL_SELECT;
+    const bool now = (pad.Buttons & combo) == combo;
+    const bool fire = now && !prevCombo;
+    prevCombo = now;
+    if (!fire || shots >= 8)
+        return;
+    void *top = nullptr; int bw = 0, fmt = 0;
+    sceDisplayGetFrameBuf(&top, &bw, &fmt, PSP_DISPLAY_SETBUF_NEXTFRAME);
+    if (!top || bw <= 0 || fmt != PSP_DISPLAY_PIXEL_FORMAT_8888)
+        return;
+    const unsigned *src = reinterpret_cast<const unsigned *>((reinterpret_cast<unsigned>(top) & 0x0FFFFFFFu) | 0x44000000u);
+    const int w = 480, h = 272, rowBytes = w * 3, total = 54 + rowBytes * h;
+    unsigned char *bmp = static_cast<unsigned char *>(malloc(total));
+    if (!bmp)
+        return;
+    std::memset(bmp, 0, 54);
+    bmp[0] = 'B'; bmp[1] = 'M';
+    *reinterpret_cast<unsigned *>(bmp + 2) = total;
+    *reinterpret_cast<unsigned *>(bmp + 10) = 54;
+    *reinterpret_cast<unsigned *>(bmp + 14) = 40;
+    *reinterpret_cast<int *>(bmp + 18) = w;
+    *reinterpret_cast<int *>(bmp + 22) = h;
+    *reinterpret_cast<unsigned short *>(bmp + 26) = 1;
+    *reinterpret_cast<unsigned short *>(bmp + 28) = 24;
+    *reinterpret_cast<unsigned *>(bmp + 34) = rowBytes * h;
+    for (int y = 0; y < h; ++y)
+    {
+        unsigned char *dst = bmp + 54 + (h - 1 - y) * rowBytes;
+        const unsigned *row = src + y * bw;
+        for (int x = 0; x < w; ++x)
+        {
+            const unsigned c = row[x]; // ABGR
+            dst[x * 3 + 0] = (c >> 16) & 0xFF;
+            dst[x * 3 + 1] = (c >> 8) & 0xFF;
+            dst[x * 3 + 2] = c & 0xFF;
+        }
+    }
+    char path[300];
+    std::snprintf(path, sizeof(path), "%s/shot%02d.bmp", PspSystem::appDir().c_str(), ++shots);
+    SceUID fd = sceIoOpen(path, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC, 0777);
+    if (fd >= 0)
+    {
+        sceIoWrite(fd, bmp, total);
+        sceIoClose(fd);
+        PspSystem::bootTrace("screenshot: %s\n", path);
+    }
+    free(bmp);
+}
+
 void present()
 {
     if (!g_init)
@@ -271,6 +331,7 @@ void present()
     geSum += PspSystem::micros() - t1;
     g_pacer.presented(sceDisplayGetVcount());
     sceGuSwapBuffers();
+    maybeScreenshot();
     lastReturn = PspSystem::micros();
 
     ++g_stats.frames;
