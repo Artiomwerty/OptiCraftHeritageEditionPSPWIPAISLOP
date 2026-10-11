@@ -1782,7 +1782,11 @@ void RenderGlobal::renderSky(float f)
 			renderDisable(RenderCapability::Fog);
 			Vec3D *fogc = worldObj->getFogColor(f);
 			const float fr = (float)fogc->xCoord, fg = (float)fogc->yCoord, fb = (float)fogc->zCoord;
-			const float dr = f1 * 0.2f + 0.04f, dg = f2 * 0.2f + 0.04f, db = f3 * 0.6f + 0.1f;
+				renderDisable(RenderCapability::CullFace);
+				// Skybox: blue by day, black by night (k follows the world's own sky brightness).
+				const float k = std::min(1.0f, std::max(0.0f, f3 * 1.15f));
+				const float tr = 0.27f * k, tg = 0.50f * k, tb = 0.96f * k;
+				const float dr = fr, dg = fg, db = fb;
 			static const float elev[] = {-90.0f, -35.0f, -8.0f, 0.0f, 8.0f, 20.0f, 38.0f, 62.0f, 90.0f};
 			const int rings = (int)(sizeof(elev) / sizeof(elev[0]));
 			const int segs = 20;
@@ -1797,7 +1801,7 @@ void RenderGlobal::renderSky(float f)
 				{
 					float t = std::min(1.0f, e / 55.0f);
 					t = t * t * (3.0f - 2.0f * t);
-					cr = fr + (f1 - fr) * t; cg = fg + (f2 - fg) * t; cb = fb + (f3 - fb) * t;
+					cr = fr + (tr - fr) * t; cg = fg + (tg - fg) * t; cb = fb + (tb - fb) * t;
 				}
 			};
 			tessellator->startDrawingQuads();
@@ -1820,6 +1824,7 @@ void RenderGlobal::renderSky(float f)
 				}
 			}
 			tessellator->draw();
+				renderEnable(RenderCapability::CullFace);
 			renderColor3f(f1, f2, f3);
 		}
 #elif defined(PS2_PLATFORM) || defined(WII_PLATFORM)
@@ -1948,7 +1953,33 @@ void RenderGlobal::renderSky(float f)
 		float starBlue = f17;
 		applyPs2LegacyAtmosphereRgb(mc, starRed, starGreen, starBlue);
 		renderColor4f(starRed, starGreen, starBlue, f17);
-#if defined(PS2_PLATFORM) || defined(WII_PLATFORM)
+#if PLATFORM_PSP
+			// White dots: ~220 fixed pseudo-random stars as small quads on a sphere.
+			renderColor4f(1.0f, 1.0f, 1.0f, f17);
+			renderDisable(RenderCapability::CullFace);
+			tessellator->startDrawingQuads();
+			std::uint32_t seed = 0x9E3779B9u;
+			auto rnd = [&seed]() { seed = seed * 1664525u + 1013904223u; return (float)(seed >> 8) / 16777216.0f; };
+			for (int si = 0; si < 220; ++si)
+			{
+				const float z = rnd() * 2.0f - 1.0f, a = rnd() * 6.2831853f;
+				const float rr = sqrtf(1.0f - z * z);
+				const float nx = rr * cosf(a), ny = z, nz = rr * sinf(a);
+				float ux = -nz, uy = 0.0f, uz = nx;
+				float ul = sqrtf(ux * ux + uz * uz);
+				if (ul < 0.001f) { ux = 1.0f; uz = 0.0f; ul = 1.0f; }
+				ux /= ul; uz /= ul;
+				const float vx = ny * uz - nz * uy, vy = nz * ux - nx * uz, vz = nx * uy - ny * ux;
+				const float R2 = 90.0f, sz = 0.5f + rnd() * 0.5f;
+				const float cx = nx * R2, cy = ny * R2, cz = nz * R2;
+				tessellator->addVertex(cx - ux * sz - vx * sz, cy - uy * sz - vy * sz, cz - uz * sz - vz * sz);
+				tessellator->addVertex(cx + ux * sz - vx * sz, cy + uy * sz - vy * sz, cz + uz * sz - vz * sz);
+				tessellator->addVertex(cx + ux * sz + vx * sz, cy + uy * sz + vy * sz, cz + uz * sz + vz * sz);
+				tessellator->addVertex(cx - ux * sz + vx * sz, cy - uy * sz + vy * sz, cz - uz * sz + vz * sz);
+			}
+			tessellator->draw();
+			renderEnable(RenderCapability::CullFace);
+#elif defined(PS2_PLATFORM) || defined(WII_PLATFORM)
 		renderStaticMeshDraw(starMesh);
 #else
 		renderCallDisplayList(starGLCallList);

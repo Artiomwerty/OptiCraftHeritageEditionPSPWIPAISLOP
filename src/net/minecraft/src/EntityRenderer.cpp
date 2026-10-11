@@ -2091,7 +2091,7 @@ void EntityRenderer::renderWorld(float partialTicks, int64_t renderTimeLimitNano
         renderDisable(RenderCapability::Fog);
         setupFog(0, partialTicks);
         renderEnable(RenderCapability::Fog);
-#if !PLATFORM_SKIP_CLOUDS
+#if !PLATFORM_SKIP_CLOUDS && !PLATFORM_PSP // PSP: no clouds (blurry and costly)
 #if PLATFORM_PS2 && MC_LOG_LEVEL > 2
         const PlatformDrawSnapshot cloudsDrawStart = platformProfileDrawSnapshot();
 #endif
