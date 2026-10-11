@@ -116,7 +116,11 @@ target_include_directories(OptiCraft PRIVATE
 )
 
 # Static-library link order: dependents first.
-target_link_libraries(OptiCraft PRIVATE ${PSP_LIBS} pspkernel m)
+target_link_libraries(OptiCraft PRIVATE ${PSP_LIBS} m)
+if(PSP_APP STREQUAL "GAME")
+    target_sources(OptiCraft PRIVATE "${CMAKE_SOURCE_DIR}/cmake/psp_stubs/ExceptionManagerForKernel_0000.o" "${CMAKE_SOURCE_DIR}/cmake/psp_stubs/ExceptionManagerForKernel_0003.o")
+    set_source_files_properties("${CMAKE_SOURCE_DIR}/cmake/psp_stubs/ExceptionManagerForKernel_0000.o" "${CMAKE_SOURCE_DIR}/cmake/psp_stubs/ExceptionManagerForKernel_0003.o" PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
+endif()
 
 # Keep an unstripped copy of the ELF (create_pbp_file strips it in Release) so a crash
 # address from the on-device report can be turned into a function with psp-addr2line.
