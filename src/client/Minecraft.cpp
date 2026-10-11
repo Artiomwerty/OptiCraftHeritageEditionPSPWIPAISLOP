@@ -219,6 +219,7 @@ namespace
 // Client boot breadcrumbs use one neutral category. Platform log sinks decide
 // whether to mirror them to a persistent boot log.
 #ifdef PSP_PLATFORM
+#include <malloc.h>
 #include "psp/system/PspSystem.h"
 #include "psp/render/PspGuDevice.h"
 #define PLATFORM_BOOT_LOG(...) PspSystem::bootTrace(__VA_ARGS__)
@@ -2966,6 +2967,17 @@ void Minecraft::preloadWorld(const std::string &s)
     int_t c  = PLATFORM_PRELOAD_RADIUS_BLOCKS;
 #else
     int_t c  = 128;
+#endif
+#if PLATFORM_PSP
+    {
+        // Respawning keeps the old surroundings resident until they age out, so a full preload at the
+        // spawn point can double the chunk memory. Preload only a small ring; the rest streams in.
+        const bool respawning = (s == "Respawning");
+        if (respawning && c > 32)
+            c = 32;
+        const struct mallinfo mi = mallinfo();
+        PspSystem::bootTrace("preload '%s': radius %d, heap used %u KB\n", s.c_str(), (int)c, (unsigned)(mi.uordblks / 1024));
+    }
 #endif
     int_t i  = 0;
     int_t j  = (c * 2) / 16 + 1;
