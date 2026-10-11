@@ -17,6 +17,9 @@ uint64_t micros();
 // black screen can be located. Tiny (a few KB per run); never used while playing.
 void bootTrace(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
+// Writes a CRASH line (epc/ra/badvaddr) to boot.log on a fatal exception.
+void installCrashHandler();
+
 // Leaves to the XMB. Safe to call from any thread.
 void exitGame();
 }

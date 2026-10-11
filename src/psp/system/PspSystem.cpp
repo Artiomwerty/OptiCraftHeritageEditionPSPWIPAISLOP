@@ -65,7 +65,7 @@ static void rawWrite(const char *path, int flags, const char *text, int len)
 void bootTrace(const char *fmt, ...)
 {
     static int lines = 0;
-    if (lines >= 320)
+    if (lines >= 1500)
         return;
     ++lines;
     char msg[300];
@@ -82,6 +82,25 @@ void bootTrace(const char *fmt, ...)
     snprintf(path, sizeof(path), "%s/boot.log", g_appDir.empty() ? "ms0:/PSP/GAME/OptiCraft" : g_appDir.c_str());
     rawWrite(path, lines == 1 ? (PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC) : (PSP_O_WRONLY | PSP_O_CREAT | PSP_O_APPEND), line, len);
 }
+
+#include <pspdebug.h>
+static void crashHandler(PspDebugRegBlock *r)
+{
+    char text[600];
+    int n = snprintf(text, sizeof(text),
+        "%8u ms  *** CRASH *** epc=%08lx ra=%08lx badva=%08lx cause=%08lx(code %lu) sp=%08lx a0-a3=%08lx %08lx %08lx %08lx v0=%08lx v1=%08lx\n",
+        (unsigned)millis(), (unsigned long)r->epc, (unsigned long)r->r[31], (unsigned long)r->badvaddr, (unsigned long)r->cause,
+        (unsigned long)((r->cause >> 2) & 0x1F), (unsigned long)r->r[29], (unsigned long)r->r[4], (unsigned long)r->r[5],
+        (unsigned long)r->r[6], (unsigned long)r->r[7], (unsigned long)r->r[2], (unsigned long)r->r[3]);
+    char path[300];
+    snprintf(path, sizeof(path), "%s/boot.log", g_appDir.empty() ? "ms0:/PSP/GAME/OptiCraft" : g_appDir.c_str());
+    if (n > 0) rawWrite(path, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_APPEND, text, n);
+    pspDebugScreenInit();
+    pspDebugScreenPrintf("%s\nCrash logged to boot.log. Press any button/wait to exit.", text);
+    sceKernelDelayThread(8 * 1000 * 1000);
+    sceKernelExitGame();
+}
+void installCrashHandler() { pspDebugInstallErrorHandler(crashHandler); }
 
 void exitGame() { sceKernelExitGame(); }
 }
