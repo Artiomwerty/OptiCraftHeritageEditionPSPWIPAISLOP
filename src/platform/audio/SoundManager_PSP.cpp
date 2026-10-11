@@ -263,7 +263,7 @@ bool startMusic(const std::string &url)
     ms->ring = static_cast<unsigned char *>(malloc(kRingBytes));
     if (!ms->ring) { sceIoClose(ms->fd); delete ms; return false; }
     g_musicRunning = 1;
-    SceUID th = sceKernelCreateThread("music", musicReaderThread, 0x30, 16 * 1024, THREAD_ATTR_USER, nullptr);
+    SceUID th = sceKernelCreateThread("music", musicReaderThread, 0x1a, 16 * 1024, THREAD_ATTR_USER, nullptr);
     if (th < 0)
     {
         g_musicRunning = 0;

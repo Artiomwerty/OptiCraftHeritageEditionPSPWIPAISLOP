@@ -181,7 +181,7 @@ struct Texture
     std::size_t totalBytes = 0;     // all levels
 };
 
-constexpr int kAtlasMipLevels = 1;  // mip chain disabled: partial-alpha mip texels made grass/leaf quads show as glassy squares
+constexpr int kAtlasMipLevels = 3;  // 256 -> 128 -> 64 (tiles 16 -> 8 -> 4 px): stops distant planks/grass shimmering; cutout alpha is re-binarised per level
 
 inline std::size_t mipOffset(const Texture &t, int level)
 {
@@ -277,7 +277,15 @@ void rebuildMips(Texture &t, int x, int y, int w, int h)
                     o[c] = asum ? static_cast<unsigned char>((p0[c] * a0 + p1[c] * a1 + p2[c] * a2 + p3[c] * a3) / asum)
                                 : static_cast<unsigned char>((p0[c] + p1[c] + p2[c] + p3[c]) / 4);
                 }
-                o[3] = static_cast<unsigned char>(asum / 4);
+                {
+                    // Uniform alpha (opaque or translucent water/ice/glass) just averages. Cutout edges
+                    // (a hole in the 2x2) are re-binarised so mips never become semi-transparent
+                    // "glassy" leaf/grass quads.
+                    const unsigned mn = std::min(std::min(a0, a1), std::min(a2, a3));
+                    const unsigned mx = std::max(std::max(a0, a1), std::max(a2, a3));
+                    const unsigned avg = asum / 4;
+                    o[3] = static_cast<unsigned char>(mn > 0 ? avg : (avg >= 96 ? mx : 0));
+                }
             }
         if (x1 > x0 && y1 > y0)
         {
@@ -507,7 +515,7 @@ void applyTexture()
             sceGuTexImage(l, t->tw >> l, t->th >> l, t->tw >> l, src + mipOffset(*t, l));
         if (t->levels > 1)
         {
-            sceGuTexLevelMode(GU_TEXTURE_AUTO, -1.0f); // negative bias: prefer the sharper level
+            sceGuTexLevelMode(GU_TEXTURE_AUTO, -0.4f); // slight bias to the sharper level
             sceGuTexFilter(t->blur ? GU_LINEAR_MIPMAP_LINEAR : GU_NEAREST_MIPMAP_NEAREST,
                            t->blur ? GU_LINEAR : GU_NEAREST);
         }

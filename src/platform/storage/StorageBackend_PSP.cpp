@@ -3,20 +3,99 @@
 #include "platform/storage/PakStorage.h"
 #include "platform/storage/PathUtils.h"
 
-#include <filesystem>
-#include <fstream>
+#include <pspiofilemgr.h>
+
+#include <cstring>
 
 // "pak://" paths are the mounted assets.pak (read-only; see PakStorage), so a
 // world shipped inside it -- the legacy tutorial -- opens through the same
 // save-format code as one on disk.
+namespace
+{
+bool statPath(const std::string& path, SceIoStat& st)
+{
+    std::memset(&st, 0, sizeof(st));
+    return sceIoGetstat(path.c_str(), &st) >= 0;
+}
+
+bool readAll(SceUID fd, unsigned char* dst, std::size_t length)
+{
+    while (length > 0)
+    {
+        const int got = sceIoRead(fd, dst, static_cast<SceSize>(length > 65536 ? 65536 : length));
+        if (got <= 0)
+            return false;
+        dst += got;
+        length -= static_cast<std::size_t>(got);
+    }
+    return true;
+}
+
+bool writeFlags(const std::string& path, const void* data, std::size_t length, int flags)
+{
+    const SceUID fd = sceIoOpen(path.c_str(), flags, 0777);
+    if (fd < 0)
+        return false;
+    const unsigned char* p = static_cast<const unsigned char*>(data);
+    bool ok = true;
+    while (length > 0)
+    {
+        const std::size_t n = length > 65536 ? 65536 : length;
+        const int put = sceIoWrite(fd, p, static_cast<SceSize>(n));
+        if (put != static_cast<int>(n))
+        {
+            ok = false;
+            break;
+        }
+        p += n;
+        length -= n;
+    }
+    sceIoClose(fd);
+    return ok;
+}
+
+bool listImpl(const std::string& path, std::vector<std::string>& out, bool dirsOnly)
+{
+    out.clear();
+    const SceUID d = sceIoDopen(path.c_str());
+    if (d < 0)
+        return false;
+    SceIoDirent ent;
+    std::memset(&ent, 0, sizeof(ent));
+    while (sceIoDread(d, &ent) > 0)
+    {
+        if (ent.d_name[0] == '.' && (ent.d_name[1] == 0 || (ent.d_name[1] == '.' && ent.d_name[2] == 0)))
+        {
+            std::memset(&ent, 0, sizeof(ent));
+            continue;
+        }
+        if (!dirsOnly || FIO_S_ISDIR(ent.d_stat.st_mode))
+            out.push_back(ent.d_name);
+        std::memset(&ent, 0, sizeof(ent));
+    }
+    sceIoDclose(d);
+    return true;
+}
+} // namespace
+
+// Everything on disk goes through raw sceIo: libc / std::filesystem path handling on "ms0:" paths
+// proved unreliable (a new world failed with "Failed to write session lock").
 namespace PlatformStorage
 {
 bool exists(const std::string& path)
 {
     if (AssetPak::isPakPath(path))
         return PakStorage::exists(path);
-    std::error_code ec;
-    return std::filesystem::exists(path, ec);
+    SceIoStat st;
+    return statPath(path, st);
+}
+
+bool pathIsDirectory(const std::string& path)
+{
+    if (AssetPak::isPakPath(path))
+        return PakStorage::isDirectory(path);
+    SceIoStat st;
+    return statPath(path, st) && FIO_S_ISDIR(st.st_mode);
 }
 
 bool mkdirs(const std::string& path)
@@ -24,25 +103,50 @@ bool mkdirs(const std::string& path)
     // Nothing to create inside the pak; the directory is there if entries are.
     if (AssetPak::isPakPath(path))
         return PakStorage::isDirectory(path);
-    std::error_code ec;
     if (path.empty())
         return false;
-    if (std::filesystem::exists(path, ec))
+    if (pathIsDirectory(path))
         return true;
-    return std::filesystem::create_directories(path, ec) || std::filesystem::exists(path, ec);
+    // Create each component after the device ("ms0:/") in turn.
+    std::size_t start = path.find(':');
+    start = (start == std::string::npos) ? 0 : start + 1;
+    while (start < path.size() && path[start] == '/')
+        ++start;
+    for (std::size_t i = start; i <= path.size(); ++i)
+    {
+        if (i == path.size() || path[i] == '/')
+        {
+            if (i > start)
+                sceIoMkdir(path.substr(0, i).c_str(), 0777);
+        }
+    }
+    return pathIsDirectory(path);
 }
 
 bool removeFile(const std::string& path)
 {
-    std::error_code ec;
-    return std::filesystem::remove(path, ec);
+    SceIoStat st;
+    if (!statPath(path, st))
+        return false;
+    return (FIO_S_ISDIR(st.st_mode) ? sceIoRmdir(path.c_str()) : sceIoRemove(path.c_str())) >= 0;
 }
 
 bool renameFile(const std::string& from, const std::string& to)
 {
-    std::error_code ec;
-    std::filesystem::rename(from, to, ec);
-    return !ec;
+    if (exists(to))
+        removeFile(to);
+    // sceIoRename wants the destination without the device prefix on real hardware.
+    std::string dest = to;
+    const std::size_t colon = dest.find(':');
+    if (colon != std::string::npos)
+    {
+        const std::size_t fromColon = from.find(':');
+        if (fromColon != std::string::npos && from.compare(0, fromColon, dest, 0, colon) == 0)
+            dest = dest.substr(colon + 1);
+    }
+    if (sceIoRename(from.c_str(), dest.c_str()) >= 0)
+        return true;
+    return sceIoRename(from.c_str(), to.c_str()) >= 0;
 }
 
 bool supportsAtomicRename() { return true; }
@@ -52,18 +156,16 @@ bool readFile(const std::string& path, std::vector<unsigned char>& out)
 {
     if (AssetPak::isPakPath(path))
         return PakStorage::readFile(path, out);
-    std::ifstream file(path, std::ios::binary);
-    if (!file)
+    SceIoStat st;
+    if (!statPath(path, st))
         return false;
-    file.seekg(0, std::ios::end);
-    const std::streamoff size = file.tellg();
-    if (size < 0)
+    const SceUID fd = sceIoOpen(path.c_str(), PSP_O_RDONLY, 0);
+    if (fd < 0)
         return false;
-    file.seekg(0, std::ios::beg);
-    out.resize(static_cast<std::size_t>(size));
-    if (size > 0)
-        file.read(reinterpret_cast<char*>(out.data()), size);
-    return file.good() || file.eof();
+    out.resize(static_cast<std::size_t>(st.st_size));
+    const bool ok = out.empty() || readAll(fd, out.data(), out.size());
+    sceIoClose(fd);
+    return ok;
 }
 
 bool writeFile(const std::string& path, const void* data, std::size_t length)
@@ -71,12 +173,7 @@ bool writeFile(const std::string& path, const void* data, std::size_t length)
     const std::string parentDir = parent(path);
     if (!parentDir.empty() && !mkdirs(parentDir))
         return false;
-    std::ofstream file(path, std::ios::binary | std::ios::trunc);
-    if (!file)
-        return false;
-    if (length != 0)
-        file.write(static_cast<const char*>(data), static_cast<std::streamsize>(length));
-    return file.good();
+    return writeFlags(path, data, length, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC);
 }
 
 bool appendFile(const std::string& path, const void* data, std::size_t length)
@@ -84,71 +181,41 @@ bool appendFile(const std::string& path, const void* data, std::size_t length)
     const std::string parentDir = parent(path);
     if (!parentDir.empty() && !mkdirs(parentDir))
         return false;
-    std::ofstream file(path, std::ios::binary | std::ios::app);
-    if (!file)
-        return false;
-    if (length != 0)
-        file.write(static_cast<const char*>(data), static_cast<std::streamsize>(length));
-    return file.good();
+    return writeFlags(path, data, length, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_APPEND);
 }
 
 std::int64_t getFileSize(const std::string& path)
 {
     if (AssetPak::isPakPath(path))
         return PakStorage::fileSize(path);
-    std::error_code ec;
-    const std::uintmax_t size = std::filesystem::file_size(path, ec);
-    return ec ? -1 : static_cast<std::int64_t>(size);
+    SceIoStat st;
+    return statPath(path, st) ? static_cast<std::int64_t>(st.st_size) : -1;
 }
 
 bool readFileRange(const std::string& path, std::size_t offset, void* out, std::size_t length)
 {
     if (AssetPak::isPakPath(path))
         return PakStorage::readFileRange(path, offset, out, length);
-    std::ifstream file(path, std::ios::binary);
-    if (!file)
+    const SceUID fd = sceIoOpen(path.c_str(), PSP_O_RDONLY, 0);
+    if (fd < 0)
         return false;
-    file.seekg(static_cast<std::streamoff>(offset), std::ios::beg);
-    file.read(static_cast<char*>(out), static_cast<std::streamsize>(length));
-    return file.gcount() == static_cast<std::streamsize>(length);
-}
-
-bool pathIsDirectory(const std::string& path)
-{
-    if (AssetPak::isPakPath(path))
-        return PakStorage::isDirectory(path);
-    std::error_code ec;
-    return std::filesystem::is_directory(path, ec);
+    bool ok = sceIoLseek32(fd, static_cast<int>(offset), PSP_SEEK_SET) == static_cast<int>(offset);
+    ok = ok && readAll(fd, static_cast<unsigned char*>(out), length);
+    sceIoClose(fd);
+    return ok;
 }
 
 bool listPathEntries(const std::string& path, std::vector<std::string>& out)
 {
     if (AssetPak::isPakPath(path))
         return PakStorage::listEntries(path, out);
-    out.clear();
-    std::error_code ec;
-    for (const auto& entry : std::filesystem::directory_iterator(path, ec))
-    {
-        if (ec)
-            break;
-        out.push_back(entry.path().filename().string());
-    }
-    return !ec;
+    return listImpl(path, out, false);
 }
 
 bool listDirs(const std::string& path, std::vector<std::string>& out)
 {
     if (AssetPak::isPakPath(path))
         return PakStorage::listDirs(path, out);
-    out.clear();
-    std::error_code ec;
-    for (const auto& entry : std::filesystem::directory_iterator(path, ec))
-    {
-        if (ec)
-            break;
-        if (entry.is_directory())
-            out.push_back(entry.path().filename().string());
-    }
-    return !ec;
+    return listImpl(path, out, true);
 }
 }

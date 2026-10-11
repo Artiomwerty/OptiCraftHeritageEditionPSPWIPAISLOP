@@ -11,6 +11,8 @@
 
 #include "lwjgl/Keyboard.h"
 #include "lwjgl/Mouse.h"
+#include "net/minecraft/src/VirtualKeyboard.h"
+#include "platform/Input.h"
 
 #include <pspctrl.h>
 #include <pspkernel.h>
@@ -102,6 +104,29 @@ void init()
 
 bool exitRequested() { return g_exit; }
 
+static unsigned g_textHeld = 0, g_textPressed = 0;
+void textSnapshot(unsigned &held, unsigned &pressed)
+{
+	held = g_textHeld;
+	pressed = g_textPressed;
+}
+
+static unsigned toText(unsigned b)
+{
+	unsigned t = 0;
+	if (b & PSP_CTRL_LEFT) t |= PLATFORM_TEXT_LEFT;
+	if (b & PSP_CTRL_RIGHT) t |= PLATFORM_TEXT_RIGHT;
+	if (b & PSP_CTRL_UP) t |= PLATFORM_TEXT_UP;
+	if (b & PSP_CTRL_DOWN) t |= PLATFORM_TEXT_DOWN;
+	if (b & PSP_CTRL_CROSS) t |= PLATFORM_TEXT_TYPE;
+	if (b & PSP_CTRL_SQUARE) t |= PLATFORM_TEXT_BACK;
+	if (b & PSP_CTRL_SELECT) t |= PLATFORM_TEXT_SPACE;
+	if (b & PSP_CTRL_TRIANGLE) t |= PLATFORM_TEXT_SHIFT;
+	if (b & PSP_CTRL_START) t |= PLATFORM_TEXT_ENTER;
+	if (b & PSP_CTRL_CIRCLE) t |= PLATFORM_TEXT_CLOSE;
+	return t;
+}
+
 void warpCursor(int x, int y)
 {
 	const int ox = g_cx, oy = g_cy;
@@ -139,6 +164,15 @@ void poll(bool inMenu)
 	}
 	const unsigned pressed = raw.buttons & ~g_prevBtn;
 	g_prevBtn = raw.buttons;
+	g_textHeld = toText(raw.buttons);
+	g_textPressed = toText(pressed);
+
+	// On-screen keyboard owns the pad while a text field is focused.
+	if (inMenu && VirtualKeyboard::instance().isActive())
+	{
+		VirtualKeyboard::instance().tick();
+		return;
+	}
 
 	if (inMenu)
 	{
