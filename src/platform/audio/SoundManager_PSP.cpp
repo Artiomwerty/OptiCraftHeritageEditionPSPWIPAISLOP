@@ -7,6 +7,28 @@
 //    reader thread into a ring buffer. Reads only, so the Memory Stick is not worn by playback.
 //  * One mixer thread feeds a 22.05 kHz stereo SRC channel with blocking output; there is no
 //    std::thread / std::mutex here (the pthread layer on this platform is unreliable).
+#ifdef PSP_NO_AUDIO
+// Diagnostic build: completely silent, no statics, no decoder.
+#include "net/minecraft/src/SoundManager.h"
+#include "net/minecraft/src/EntityLiving.h"
+#include "net/minecraft/src/GameSettings.h"
+void *SoundManager::sndSystem = nullptr;
+bool SoundManager::loaded = false;
+SoundManager::SoundManager() : soundVolume(0), options(nullptr), ticksBeforeMusic(0) {}
+void SoundManager::loadSoundSettings(GameSettings *g) { options = g; }
+void SoundManager::tryToSetLibraryAndCodecs() {}
+void SoundManager::onSoundOptionsChanged() {}
+void SoundManager::closeMinecraft() {}
+void SoundManager::addSound(const jstring &, const std::string &) {}
+void SoundManager::addStreaming(const jstring &, const std::string &) {}
+void SoundManager::addMusic(const jstring &, const std::string &) {}
+void SoundManager::playRandomMusicIfReady() {}
+bool SoundManager::playMusicFileNow(const std::string &) { return false; }
+void SoundManager::setListenerPosition(EntityLiving *, float) {}
+void SoundManager::playStreaming(const jstring &, float, float, float, float, float) {}
+void SoundManager::playSound(const jstring &, float, float, float, float, float) {}
+void SoundManager::playSoundFX(const jstring &, float, float) {}
+#else
 #include "net/minecraft/src/SoundManager.h"
 
 #include <pspaudio.h>
@@ -365,10 +387,6 @@ void SoundManager::tryToSetLibraryAndCodecs()
         loaded = true;
         return;
     }
-#ifdef PSP_NO_AUDIO
-    PspSystem::bootTrace("audio: disabled in this build");
-    return;
-#endif
     SceUID th = sceKernelCreateThread("audio", mixerThread, 0x18, 16 * 1024, THREAD_ATTR_USER, nullptr);
     if (th >= 0 && sceKernelStartThread(th, 0, nullptr) >= 0)
     {
@@ -457,3 +475,5 @@ void SoundManager::playSoundFX(const jstring &s, float volume, float)
     if (entry)
         startVoice(loadSample(entry->soundUrl), std::min(volume, 1.0f) * 0.5f * g_soundVolume);
 }
+
+#endif // PSP_NO_AUDIO

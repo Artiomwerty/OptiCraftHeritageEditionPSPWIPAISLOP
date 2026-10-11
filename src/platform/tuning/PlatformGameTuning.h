@@ -492,7 +492,7 @@
 #  define PLATFORM_LEGACY_GUI_SCALE                    0.0
 #  define PLATFORM_LEGACY_CREATE_WORLD_PANEL_WIDTH     245
 #  define PLATFORM_FORCE_GUI_SCALE                     0
-#  define PLATFORM_NEAR_PLANE                          0.05f
+#  define PLATFORM_NEAR_PLANE                          (PLATFORM_PSP ? 0.3f : 0.05f)
 // Desktop: the F3 frame-time histogram covers a third of the screen and the
 // port has better instrumentation elsewhere. Set to 1 for vanilla behaviour.
 #  define PLATFORM_SHOW_LAGOMETER                      0

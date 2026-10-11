@@ -357,8 +357,13 @@ void GameSettings::loadOptions()
 	legacyUI = false;
 	legacyLook = false;
 	// Sky, sun/moon and (fast) clouds were switched off in earlier test builds and saved that way.
+#ifdef PSP_NO_SKY
+	ofSky = false;
+	ofSunMoon = false;
+#else
 	ofSky = true;
 	ofSunMoon = true;
+#endif
 	if (ofClouds == 3)
 		ofClouds = 1;
 	legacyCrafting = true; // console-style crafting grid is the PSP default

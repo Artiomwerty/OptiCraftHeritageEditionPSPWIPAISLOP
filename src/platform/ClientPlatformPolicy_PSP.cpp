@@ -47,8 +47,13 @@ void applyGameSettingsDefaults(GameSettings* settings)
     settings->ofRenderDistanceFine = 40; // ~2.5 chunks
     platformGameSettingsUpdateRenderDistanceFromFine(settings->ofRenderDistanceFine, settings->renderDistance);
     platformGameSettingsApplyLegacyCrafting(*settings);
+#ifdef PSP_NO_SKY
+    settings->ofSky = false;
+    settings->ofSunMoon = false;
+#else
     settings->ofSky = true;
     settings->ofSunMoon = true;
+#endif
     settings->ofClouds = 1; // fast clouds
 #else
     (void)settings;
