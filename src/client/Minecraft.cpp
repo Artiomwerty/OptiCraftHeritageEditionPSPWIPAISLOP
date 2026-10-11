@@ -1046,6 +1046,7 @@ void Minecraft::run()
                     entityRenderer->updateCameraAndRender(timer->renderPartialTicks);
 #if PLATFORM_PSP
                     PspGu::prof().render += (unsigned)(PspSystem::micros() - pspRenT0);
+                    if (currentScreen != nullptr) PspGu::prof().gui++;
 #endif
                     clientRenderNs = System::nanoTime() - clientRenderStartNs;
                     ClientProfiler::render(clientRenderNs);
