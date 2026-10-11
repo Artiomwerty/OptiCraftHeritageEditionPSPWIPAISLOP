@@ -252,12 +252,12 @@ void present()
     if (++profFrames == 120)
     {
         if (profLines++ < 90)
-            PspSystem::bootTrace("perf: %u us/frame (%.1f fps), work %u us (tick %u light %u render %u display %u), GE+wait %u us, draws %u verts %u, screen open %u/120 (world %u overlay %u clear %u screen %u)",
+            PspSystem::bootTrace("perf: %u us/frame (%.1f fps), work %u us (tick %u light %u render %u display %u), GE+wait %u us, draws %u verts %u, screen open %u/120 (world %u overlay %u clear %u screen %u)\n",
                                  (unsigned)(frameSum / 119), 119.0e6 / (double)(frameSum ? frameSum : 1),
                                  (unsigned)(workSum / 120), g_prof.tick / 120, g_prof.light / 120, g_prof.render / 120,
                                  g_prof.display / 120, (unsigned)(geSum / 120),
                                  g_stats.lastDrawCalls, g_stats.lastVertices, g_prof.gui, g_prof.world / 120, g_prof.overlay / 120, g_prof.clear / 120, g_prof.screen / 120);
-            { const struct mallinfo mi = mallinfo(); PspSystem::bootTrace("mem: heap used %u KB, arena %u KB, arenaDrops %u\n", (unsigned)(mi.uordblks / 1024), (unsigned)(mi.arena / 1024), (unsigned)g_stats.arenaDrops); }
+            { const struct mallinfo mi = mallinfo(); PspSystem::bootTrace("mem: heap used %u KB, arena %u KB, arenaDrops %u, sys free %u KB, max block %u KB\n", (unsigned)(mi.uordblks / 1024), (unsigned)(mi.arena / 1024), (unsigned)g_stats.arenaDrops, (unsigned)(sceKernelTotalFreeMemSize() / 1024), (unsigned)(sceKernelMaxFreeMemSize() / 1024)); }
             PspProfile::dump();
             g_prof = Prof();
             workSum = 0;
