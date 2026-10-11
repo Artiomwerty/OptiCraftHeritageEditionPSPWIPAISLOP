@@ -35,6 +35,7 @@ void SoundManager::playSoundFX(const jstring &, float, float) {}
 #include <pspkernel.h>
 
 #include <algorithm>
+#include <malloc.h>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -64,7 +65,8 @@ constexpr std::size_t kMaxCacheBytes = 3 * 1024 * 1024;
 constexpr std::uint32_t kRingBytes = 128 * 1024;
 constexpr std::uint32_t kReadChunk = 16 * 1024;
 
-AudioListenerState g_listener;
+AudioListenerState *g_listenerPtr = nullptr;
+#define g_listener (*g_listenerPtr)
 float g_soundVolume = 1.0f;
 float g_musicVolume = 1.0f;
 bool g_started = false;
@@ -77,7 +79,8 @@ struct Sample
     int rate = kOutRate;
 };
 
-std::unordered_map<std::string, Sample *> g_cache;
+std::unordered_map<std::string, Sample *> *g_cachePtr = nullptr;
+#define g_cache (*g_cachePtr)
 std::size_t g_cacheBytes = 0;
 
 struct Voice
@@ -285,8 +288,8 @@ void stopMusic()
 
 // --------------------------------------------------------------------------------- mixer ---
 
-alignas(64) std::int16_t g_out[kBlockFrames * 2];
-std::int32_t g_mix[kBlockFrames * 2];
+std::int16_t *g_out = nullptr;  // memalign(64), allocated when the mixer starts
+std::int32_t *g_mix = nullptr;
 
 bool musicPull(MusicStream *m, std::int16_t out[2])
 {
@@ -307,7 +310,7 @@ int mixerThread(SceSize, void *)
         return sceKernelExitDeleteThread(0);
     for (;;)
     {
-        std::memset(g_mix, 0, sizeof(g_mix));
+        std::memset(g_mix, 0, sizeof(std::int32_t) * kBlockFrames * 2);
 
         for (int vi = 0; vi < kVoices; ++vi)
         {
@@ -387,6 +390,15 @@ void SoundManager::tryToSetLibraryAndCodecs()
         loaded = true;
         return;
     }
+    g_listenerPtr = new AudioListenerState();
+    g_cachePtr = new std::unordered_map<std::string, Sample *>();
+    g_out = static_cast<std::int16_t *>(memalign(64, sizeof(std::int16_t) * kBlockFrames * 2));
+    g_mix = static_cast<std::int32_t *>(memalign(64, sizeof(std::int32_t) * kBlockFrames * 2));
+    if (!g_out || !g_mix)
+    {
+        PspSystem::bootTrace("audio: out of memory");
+        return;
+    }
     SceUID th = sceKernelCreateThread("audio", mixerThread, 0x18, 16 * 1024, THREAD_ATTR_USER, nullptr);
     if (th >= 0 && sceKernelStartThread(th, 0, nullptr) >= 0)
     {
@@ -449,6 +461,7 @@ bool SoundManager::playMusicFileNow(const std::string &file)
 
 void SoundManager::setListenerPosition(EntityLiving *entityliving, float partialTick)
 {
+    if (!g_listenerPtr) return;
     updateAudioListener(g_listener, entityliving, partialTick);
 }
 
