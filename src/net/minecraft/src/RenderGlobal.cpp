@@ -2920,8 +2920,10 @@ void RenderGlobal::drawBlockBreaking(EntityPlayer *entityplayer, MovingObjectPos
 			Block *block = k <= 0 ? nullptr : Block::blocksList[k];
 
 			renderDisable(RenderCapability::AlphaTest);
+#if !defined(PSP_PLATFORM)
 			renderPolygonOffset(-3.0f, -3.0f);
 			renderEnable(RenderCapability::PolygonOffsetFill);
+#endif
 
 			double d = entityplayer->lastTickPosX + (entityplayer->posX - entityplayer->lastTickPosX) * (double)f;
 			double d1 = entityplayer->lastTickPosY + (entityplayer->posY - entityplayer->lastTickPosY) * (double)f;
@@ -2931,6 +2933,19 @@ void RenderGlobal::drawBlockBreaking(EntityPlayer *entityplayer, MovingObjectPos
 				block = Block::stone;
 
 			renderEnable(RenderCapability::AlphaTest);
+#if defined(PSP_PLATFORM)
+			// The PSP GE has a 16-bit depth buffer and no usable polygon offset: the crack overlay is
+			// coplanar with the block faces and z-fights into triangles. Grow it 0.5% about the block
+			// centre instead so it always sits just in front.
+			{
+				const float cx = (float)((double)movingobjectposition->blockX + 0.5 - d);
+				const float cy = (float)((double)movingobjectposition->blockY + 0.5 - d1);
+				const float cz = (float)((double)movingobjectposition->blockZ + 0.5 - d2);
+				renderTranslate(cx, cy, cz);
+				renderScale(1.006f, 1.006f, 1.006f);
+				renderTranslate(-cx, -cy, -cz);
+			}
+#endif
 			tessellator->startDrawingQuads();
 			tessellator->setTranslationD(-d, -d1, -d2);
 			tessellator->disableColor();
@@ -2939,8 +2954,10 @@ void RenderGlobal::drawBlockBreaking(EntityPlayer *entityplayer, MovingObjectPos
 			tessellator->setTranslationD(0.0, 0.0, 0.0);
 
 			renderDisable(RenderCapability::AlphaTest);
+#if !defined(PSP_PLATFORM)
 			renderPolygonOffset(0.0f, 0.0f);
 			renderDisable(RenderCapability::PolygonOffsetFill);
+#endif
 			renderEnable(RenderCapability::AlphaTest);
 			renderDepthMask(true);
 			renderPopMatrix();

@@ -61,7 +61,6 @@ struct MatrixStack
 MatrixStack g_stacks[3];
 MatrixStack g_texUnit1Stack; // swallowed: the lightmap's texture matrix has no meaning here
 int g_matrixMode = SlotModelView;
-float g_polyBias = 0.0f; // clip-space depth bias for polygon offset draws
 bool g_mvDirty = true, g_projDirty = true, g_texMatrixDirty = true;
 int g_activeUnit = 0;
 
@@ -478,17 +477,7 @@ void uploadMatrices()
     }
     if (g_projDirty)
     {
-        // Polygon offset: the GE's own depth offset is unreliable with the reversed depth range, so pull
-        // the geometry towards the camera in clip space instead (z' = z - bias * w).
-        Mat4 pm = g_stacks[SlotProjection].cur();
-        if (g_polyBias != 0.0f)
-        {
-            pm.m[2] -= g_polyBias * pm.m[3];
-            pm.m[6] -= g_polyBias * pm.m[7];
-            pm.m[10] -= g_polyBias * pm.m[11];
-            pm.m[14] -= g_polyBias * pm.m[15];
-        }
-        sceGuSetMatrix(GU_PROJECTION, reinterpret_cast<const ScePspFMatrix4 *>(pm.m));
+        sceGuSetMatrix(GU_PROJECTION, reinterpret_cast<const ScePspFMatrix4 *>(g_stacks[SlotProjection].cur().m));
         g_projDirty = false;
     }
 }
@@ -670,8 +659,7 @@ void applyState(bool meshLit)
     if (pkey != g_a.polyKey)
     {
         g_a.polyKey = pkey;
-        g_polyBias = pkey ? 2.5e-4f * std::fabs(g_s.polyUnits) : 0.0f;
-        g_projDirty = true;
+        sceGuDepthOffset(pkey ? pkey - 1u : 0u);
     }
     applyFog();
     applyLighting(meshLit);
