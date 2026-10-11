@@ -2,6 +2,7 @@
 #ifdef PSP_PLATFORM
 
 #include <pspkernel.h>
+#include <pspiofilemgr.h>
 #include <psppower.h>
 #include <unistd.h>
 #include <cstring>
@@ -42,6 +43,22 @@ int main(int argc, char **argv)
 	lwjgl::GLContext::instantiate();
 	Tessellator::convertQuadsToTriangles = true;
 
+	{
+		// Raw probe of assets.pak so a missing / short / corrupt file is obvious in boot.log.
+		const std::string pak = PspSystem::appDir() + "/assets.pak";
+		SceUID fd = sceIoOpen(pak.c_str(), PSP_O_RDONLY, 0);
+		if (fd < 0)
+			PspSystem::bootTrace("pak probe: open('%s') failed 0x%08x\n", pak.c_str(), (unsigned)fd);
+		else
+		{
+			char magic[8] = {0};
+			sceIoRead(fd, magic, 4);
+			const int size = sceIoLseek32(fd, 0, PSP_SEEK_END);
+			sceIoClose(fd);
+			PspSystem::bootTrace("pak probe: open ok, size=%d magic=%02x%02x%02x%02x ('%.4s')\n", size,
+			                     (unsigned char)magic[0], (unsigned char)magic[1], (unsigned char)magic[2], (unsigned char)magic[3], magic);
+		}
+	}
 	PspSystem::bootTrace("main: assets.pak mounted=%d path=%s\n", AssetPak::mountFrom(PspSystem::appDir()) ? 1 : 0, AssetPak::archivePath().c_str());
 	PspSystem::bootTrace("main: before Minecraft::start\n");
 	jstring username = "Player";
