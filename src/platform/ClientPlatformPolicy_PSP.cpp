@@ -1,4 +1,6 @@
 #include <pspiofilemgr.h>
+#include <string>
+#include "psp/system/PspSystem.h"
 #include "platform/ClientPlatformPolicy.h"
 
 #include "net/minecraft/src/GameResources.h"
@@ -21,10 +23,17 @@ int initialHeight()
 
 std::string minecraftDirectory()
 {
-    // Worlds and options live in the Memory Stick's save folder, not next to the EBOOT.
-    sceIoMkdir("ms0:/PSP/SAVEDATA", 0777);
-    sceIoMkdir("ms0:/PSP/SAVEDATA/OPTICRAFT", 0777);
-    return "ms0:/PSP/SAVEDATA/OPTICRAFT";
+    // Worlds and options live in the save folder of the same storage the game runs from
+    // (ms0: on a Memory Stick, ef0: on the PSP Go's internal storage), not next to the EBOOT.
+    std::string dev = "ms0:";
+    const std::string app = PspSystem::appDir();
+    const std::size_t colon = app.find(':');
+    if (colon != std::string::npos && colon <= 4)
+        dev = app.substr(0, colon + 1);
+    sceIoMkdir((dev + "/PSP").c_str(), 0777);
+    sceIoMkdir((dev + "/PSP/SAVEDATA").c_str(), 0777);
+    sceIoMkdir((dev + "/PSP/SAVEDATA/OPTICRAFT").c_str(), 0777);
+    return dev + "/PSP/SAVEDATA/OPTICRAFT";
 }
 
 bool saveConverterUsesSavesSubdirectory()
@@ -74,7 +83,8 @@ void releaseWorldEntryAssets(RenderEngine*)
 
 int panoramaSampleGrid()
 {
-    return 8;
+    // One pass: the 8x8 accumulation was 384 draws per frame (about 1.6 s per frame on a real PSP).
+    return 1;
 }
 
 

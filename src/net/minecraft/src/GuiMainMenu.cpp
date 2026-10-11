@@ -451,7 +451,11 @@ void GuiMainMenu::rotateAndBlurSkybox(float_t, bool copyFramebuffer)
 
 void GuiMainMenu::renderSkybox(int_t mouseX, int_t mouseY, float_t partialTick)
 {
+#if PLATFORM_PSP
+    bool canBlur = false; // no framebuffer copy / blur passes on PSP: draw the cube once
+#else
     bool canBlur = viewportTexture >= 0;
+#endif
 
     if (canBlur)
     {
