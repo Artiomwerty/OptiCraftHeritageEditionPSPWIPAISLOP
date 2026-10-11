@@ -1,4 +1,4 @@
-#if PLATFORM_PSP
+#if defined(PSP_PLATFORM)
 #include "psp/system/PspSystem.h"
 #endif
 #include "EntityRenderer.h"
