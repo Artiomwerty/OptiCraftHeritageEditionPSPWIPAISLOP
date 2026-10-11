@@ -1,3 +1,4 @@
+#include <pspiofilemgr.h>
 #include "platform/ClientPlatformPolicy.h"
 
 #include "net/minecraft/src/GameResources.h"
@@ -20,7 +21,10 @@ int initialHeight()
 
 std::string minecraftDirectory()
 {
-    return GameResources::getExeDir() + "/.minecraft";
+    // Worlds and options live in the Memory Stick's save folder, not next to the EBOOT.
+    sceIoMkdir("ms0:/PSP/SAVEDATA", 0777);
+    sceIoMkdir("ms0:/PSP/SAVEDATA/OPTICRAFT", 0777);
+    return "ms0:/PSP/SAVEDATA/OPTICRAFT";
 }
 
 bool saveConverterUsesSavesSubdirectory()

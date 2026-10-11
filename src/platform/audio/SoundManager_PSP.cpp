@@ -305,9 +305,14 @@ bool musicPull(MusicStream *m, std::int16_t out[2])
 
 int mixerThread(SceSize, void *)
 {
-    const int ch = sceAudioSRCChReserve(kBlockFrames, kOutRate, 2);
+    // Plain 44.1 kHz stereo hardware channel (the SRC channel is not reliable at 22.05 kHz):
+    // we mix at 22.05 kHz and duplicate/interpolate each frame into two output frames.
+    const int ch = sceAudioChReserve(PSP_AUDIO_NEXT_CHANNEL, kBlockFrames * 2, PSP_AUDIO_FORMAT_STEREO);
+    PspSystem::bootTrace("audio: channel reserve -> %d", ch);
     if (ch < 0)
         return sceKernelExitDeleteThread(0);
+    bool tracedOut = false;
+    std::int16_t prevL = 0, prevR = 0;
     for (;;)
     {
         std::memset(g_mix, 0, sizeof(std::int32_t) * kBlockFrames * 2);
@@ -358,12 +363,24 @@ int mixerThread(SceSize, void *)
             }
         }
 
-        for (int i = 0; i < kBlockFrames * 2; ++i)
+        for (int i = 0; i < kBlockFrames; ++i)
         {
-            int s = g_mix[i];
-            g_out[i] = static_cast<std::int16_t>(s > 32767 ? 32767 : (s < -32768 ? -32768 : s));
+            int l = g_mix[i * 2], r = g_mix[i * 2 + 1];
+            l = l > 32767 ? 32767 : (l < -32768 ? -32768 : l);
+            r = r > 32767 ? 32767 : (r < -32768 ? -32768 : r);
+            if (!tracedOut && (l > 64 || l < -64))
+            {
+                tracedOut = true;
+                PspSystem::bootTrace("audio: first audible block");
+            }
+            g_out[i * 4] = static_cast<std::int16_t>((prevL + l) >> 1);
+            g_out[i * 4 + 1] = static_cast<std::int16_t>((prevR + r) >> 1);
+            g_out[i * 4 + 2] = static_cast<std::int16_t>(l);
+            g_out[i * 4 + 3] = static_cast<std::int16_t>(r);
+            prevL = static_cast<std::int16_t>(l);
+            prevR = static_cast<std::int16_t>(r);
         }
-        sceAudioSRCOutputBlocking(PSP_AUDIO_VOLUME_MAX, g_out);
+        sceAudioOutputBlocking(ch, PSP_AUDIO_VOLUME_MAX, g_out);
     }
 }
 } // namespace
@@ -392,7 +409,7 @@ void SoundManager::tryToSetLibraryAndCodecs()
     }
     g_listenerPtr = new AudioListenerState();
     g_cachePtr = new std::unordered_map<std::string, Sample *>();
-    g_out = static_cast<std::int16_t *>(memalign(64, sizeof(std::int16_t) * kBlockFrames * 2));
+    g_out = static_cast<std::int16_t *>(memalign(64, sizeof(std::int16_t) * kBlockFrames * 4));
     g_mix = static_cast<std::int32_t *>(memalign(64, sizeof(std::int32_t) * kBlockFrames * 2));
     if (!g_out || !g_mix)
     {
