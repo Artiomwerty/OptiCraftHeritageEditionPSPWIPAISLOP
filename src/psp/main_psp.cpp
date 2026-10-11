@@ -4,6 +4,7 @@
 #include <pspkernel.h>
 #include <psppower.h>
 #include <unistd.h>
+#include <cstring>
 
 #include "client/Minecraft.h"
 #include "java/String.h"
@@ -13,8 +14,13 @@
 
 // Runs before every other global constructor: proves the program got this far and records what libc
 // believes the current directory is (empty means path handling would crash).
+extern "C" char __cwd[256];
 __attribute__((constructor(101))) static void earlyTrace()
 {
+	if (__cwd[0] == 0)
+	{
+		strncpy(__cwd, "ms0:/PSP/GAME/OptiCraft", sizeof(__cwd) - 1);
+	}
 	char cwd[256] = "(getcwd failed)";
 	if (!getcwd(cwd, sizeof(cwd)))
 		cwd[0] = 0;

@@ -5,7 +5,10 @@
 #include <cstdarg>
 #include <pspiofilemgr.h>
 #include <cstdio>
+#include <cstring>
 #include <unistd.h>
+
+extern "C" char __cwd[256]; // newlib/pspsdk libcglue's current directory
 
 namespace
 {
@@ -30,7 +33,14 @@ void setAppDirFromArgv0(const char *argv0)
     // work with a full "ms0:/..." directory and make it the current directory.
     if (g_appDir.find(':') == std::string::npos)
         g_appDir = std::string("ms0:") + (g_appDir.empty() || g_appDir[0] != '/' ? "/" : "") + g_appDir;
-    const int rc = chdir(g_appDir.c_str());
+    int rc = chdir(g_appDir.c_str());
+    if (rc != 0)
+    {
+        // chdir() is refused on some launches and leaves libc without a current directory, which makes
+        // every path starting with '/' crash in __path_absolute. Set it directly.
+        strncpy(__cwd, g_appDir.c_str(), sizeof(__cwd) - 1);
+        __cwd[sizeof(__cwd) - 1] = 0;
+    }
     char cwd[256] = "";
     if (!getcwd(cwd, sizeof(cwd))) cwd[0] = 0;
     bootTrace("setAppDir: chdir('%s')=%d cwd='%s'\n", g_appDir.c_str(), rc, cwd);
