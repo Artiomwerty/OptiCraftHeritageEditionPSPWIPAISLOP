@@ -11,6 +11,7 @@
 #include "lwjgl/GLContext.h"
 #include "net/minecraft/src/Tessellator.h"
 #include "psp/system/PspSystem.h"
+#include "platform/storage/AssetPak.h"
 
 // Runs before every other global constructor: proves the program got this far and records what libc
 // believes the current directory is (empty means path handling would crash).
@@ -41,6 +42,7 @@ int main(int argc, char **argv)
 	lwjgl::GLContext::instantiate();
 	Tessellator::convertQuadsToTriangles = true;
 
+	PspSystem::bootTrace("main: assets.pak mounted=%d path=%s\n", AssetPak::mountFrom(PspSystem::appDir()) ? 1 : 0, AssetPak::archivePath().c_str());
 	PspSystem::bootTrace("main: before Minecraft::start\n");
 	jstring username = "Player";
 	jstring auth = "-";
