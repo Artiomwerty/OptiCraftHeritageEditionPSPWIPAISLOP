@@ -231,11 +231,11 @@ void present()
     if (++profFrames == 120)
     {
         if (profLines++ < 40)
-            PspSystem::bootTrace("perf: %u us/frame (%.1f fps), work %u us (tick %u light %u render %u display %u), GE+wait %u us, draws %u verts %u, screen open %u/120",
+            PspSystem::bootTrace("perf: %u us/frame (%.1f fps), work %u us (tick %u light %u render %u display %u), GE+wait %u us, draws %u verts %u, screen open %u/120 (world %u overlay %u clear %u screen %u)",
                                  (unsigned)(frameSum / 119), 119.0e6 / (double)(frameSum ? frameSum : 1),
                                  (unsigned)(workSum / 120), g_prof.tick / 120, g_prof.light / 120, g_prof.render / 120,
                                  g_prof.display / 120, (unsigned)(geSum / 120),
-                                 g_stats.lastDrawCalls, g_stats.lastVertices, g_prof.gui);
+                                 g_stats.lastDrawCalls, g_stats.lastVertices, g_prof.gui, g_prof.world / 120, g_prof.overlay / 120, g_prof.clear / 120, g_prof.screen / 120);
             g_prof = Prof();
             workSum = 0;
         profFrames = 0; geSum = 0; frameSum = 0;

@@ -1,5 +1,6 @@
 #if defined(PSP_PLATFORM)
 #include "psp/system/PspSystem.h"
+#include "psp/render/PspGuDevice.h"
 #endif
 #include "EntityRenderer.h"
 #if PLATFORM_PS2
@@ -1424,7 +1425,13 @@ void EntityRenderer::updateCameraAndRender(float partialTicks)
         }
         else
         {
+#if PLATFORM_PSP
+            const std::uint64_t pspW0 = PspSystem::micros();
+#endif
             renderWorld(partialTicks, targetTime);
+#if PLATFORM_PSP
+            PspGu::prof().world += (unsigned)(PspSystem::micros() - pspW0);
+#endif
 
 #if PLATFORM_PS2
             renderSetLegacyPresentationGamma(false);
@@ -1441,8 +1448,14 @@ void EntityRenderer::updateCameraAndRender(float partialTicks)
 #if PLATFORM_PS2 && MC_LOG_LEVEL > 2
                 const PlatformDrawSnapshot hudDrawStart = platformProfileDrawSnapshot();
 #endif
+#if PLATFORM_PSP
+                const std::uint64_t pspO0 = PspSystem::micros();
+#endif
                 mc->ingameGUI->renderGameOverlay(partialTicks, mc->currentScreen != nullptr,
                                                  scaledMouseX, scaledMouseY);
+#if PLATFORM_PSP
+                PspGu::prof().overlay += (unsigned)(PspSystem::micros() - pspO0);
+#endif
 #if PLATFORM_PROFILE_RENDER_PHASES
                 platformProfileRenderPhaseEnd(cycHud, PlatformRenderPhase::Hud);
 #endif
@@ -1498,12 +1511,24 @@ void EntityRenderer::updateCameraAndRender(float partialTicks)
         // GX Z writes independently of the logical DepthTest state.
         renderDisable(RenderCapability::DepthTest);
 #endif
+#if PLATFORM_PSP
+        const std::uint64_t pspC0 = PspSystem::micros();
+#endif
         renderClear(RenderClearMask::Depth);  // 256 = GL_DEPTH_BUFFER_BIT
+#if PLATFORM_PSP
+        PspGu::prof().clear += (unsigned)(PspSystem::micros() - pspC0);
+#endif
 
 #if PLATFORM_PS2
         ps2SetMenuPad(mc->isScreenOwnedByPlayer2() ? 1 : 0);
 #endif
+#if PLATFORM_PSP
+        const std::uint64_t pspS0 = PspSystem::micros();
+#endif
         mc->currentScreen->drawScreen(scaledMouseX, scaledMouseY, partialTicks);
+#if PLATFORM_PSP
+        PspGu::prof().screen += (unsigned)(PspSystem::micros() - pspS0);
+#endif
 
 #if PLATFORM_HAS_VIRTUAL_KEYBOARD
         // On-screen keyboard overlay (drawn on top of the focused text screen).
