@@ -116,7 +116,7 @@ target_include_directories(OptiCraft PRIVATE
 )
 
 # Static-library link order: dependents first.
-target_link_libraries(OptiCraft PRIVATE ${PSP_LIBS} m)
+target_link_libraries(OptiCraft PRIVATE ${PSP_LIBS} pspkernel m)
 
 # Keep an unstripped copy of the ELF (create_pbp_file strips it in Release) so a crash
 # address from the on-device report can be turned into a function with psp-addr2line.
