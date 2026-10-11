@@ -2046,8 +2046,14 @@ void RenderGlobal::renderClouds(float f)
 
 	float f1 = (float)(mc->renderViewEntity->lastTickPosY + (mc->renderViewEntity->posY - mc->renderViewEntity->lastTickPosY) * (double)f);
 
+#if PLATFORM_PSP
+	// Smaller tiles within the far plane (80): 32-block quads straddling it get dropped by the GE.
+	byte_t byte0 = 12;
+	int_t i = 6;
+#else
 	byte_t byte0 = 32;
 	int_t i = 256 / byte0;
+#endif
 
 	Tessellator *tessellator = &Tessellator::instance;
 

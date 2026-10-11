@@ -1734,7 +1734,11 @@ void EntityRenderer::renderWorld(float partialTicks, int64_t renderTimeLimitNano
         ClippingHelperImpl::getInstance();
         
         // Renderizar cielo (solo en distancias cortas)
+#if PLATFORM_PSP
+        if (true) // PSP runs at short render distance; sky must still draw
+#else
         if (mc->gameSettings->renderDistance < 2)
+#endif
         {
             setupFog(-1, partialTicks);
 #if PLATFORM_PROFILE_RENDER_PHASES
