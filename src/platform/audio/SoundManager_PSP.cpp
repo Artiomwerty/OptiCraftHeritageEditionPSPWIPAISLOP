@@ -59,7 +59,7 @@ bool SoundManager::loaded = false;
 namespace
 {
 constexpr int kOutRate = 22050;
-constexpr int kBlockFrames = 512; // multiple of 64
+constexpr int kBlockFrames = 1024; // mix frames per block (multiple of 64): 2048 output frames = 46 ms
 constexpr int kVoices = 8;
 constexpr std::size_t kMaxCacheBytes = 3 * 1024 * 1024;
 constexpr std::uint32_t kRingBytes = 128 * 1024;
@@ -373,6 +373,19 @@ int mixerThread(SceSize, void *)
             prevR = static_cast<std::int16_t>(r);
         }
         sceAudioOutputBlocking(ch, PSP_AUDIO_VOLUME_MAX, g_out);
+        {
+            // Gap diagnostics: how late the next block was handed over.
+            static std::uint64_t lastT = 0;
+            static int lateLogged = 0, blocks = 0;
+            const std::uint64_t now = PspSystem::micros();
+            ++blocks;
+            if (lastT && now - lastT > 60000 && lateLogged < 12 && blocks > 8)
+            {
+                ++lateLogged;
+                PspSystem::bootTrace("audio: late block %u us", (unsigned)(now - lastT));
+            }
+            lastT = now;
+        }
     }
 }
 } // namespace

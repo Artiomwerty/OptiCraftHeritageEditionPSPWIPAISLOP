@@ -1,3 +1,6 @@
+#if PLATFORM_PSP
+#include "psp/system/PspSystem.h"
+#endif
 #include "EntityRenderer.h"
 #if PLATFORM_PS2
 #include "ps2/minecraft/Ps2WeatherMath.h"
@@ -724,7 +727,11 @@ float EntityRenderer::getFOVModifier(float partialTicks, bool applyFovModifiers)
     // enable smooth camera while zoomed, and restore fresh filters on release.
     bool zoomActive = false;
     // [FIX CRÍTICO WII] Verificación defensiva contra nullptr en ofKeyBindZoom para evitar DSI Exception / Segfault si no está instanciado.
+#if PLATFORM_PSP
+    if (false) // no zoom key on the PSP; a stuck binding zoomed the view after leaving the options menu
+#else
     if (mc->gameSettings->ofKeyBindZoom != nullptr)
+#endif
     {
         if (mc->gameSettings->ofKeyBindZoom->keyCode < 0)
             zoomActive = lwjgl::Mouse::isButtonDown(mc->gameSettings->ofKeyBindZoom->keyCode + 100);
@@ -766,6 +773,19 @@ float EntityRenderer::getFOVModifier(float partialTicks, bool applyFovModifiers)
         fov *= 60.0f / 70.0f;
     }
 
+#if PLATFORM_PSP
+    if (applyFovModifiers)
+    {
+        static float lastFov = -1.0f;
+        static int traced = 0;
+        if (traced < 40 && (fov > lastFov + 0.5f || fov < lastFov - 0.5f))
+        {
+            ++traced;
+            lastFov = fov;
+            PspSystem::bootTrace("fov: setting=%.2f fov=%.1f zoomMode=%d", mc->gameSettings->fovSetting, fov, zoomMode ? 1 : 0);
+        }
+    }
+#endif
     return fov + prevCameraRoll + (cameraRoll - prevCameraRoll) * partialTicks;
 }
 
