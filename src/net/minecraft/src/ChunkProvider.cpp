@@ -180,6 +180,15 @@ std::uint64_t ChunkProvider::chunkKey(int_t i, int_t j)
 	     | static_cast<std::uint32_t>(j);
 }
 
+#if defined(PSP_PLATFORM)
+#include "psp/system/PspSystem.h"
+// Crash breadcrumbs: the last "crumb" line in boot.log shows what the game was doing when it died.
+static int s_crumbs = 0;
+#define PSP_CRUMB(fmt, a, b) do { if (s_crumbs < 600) { ++s_crumbs; PspSystem::bootTrace("crumb: " fmt "\n", (int)(a), (int)(b)); } } while (0)
+#else
+#define PSP_CRUMB(fmt, a, b) do { } while (0)
+#endif
+
 void ChunkProvider::markChunkTopologyChanged()
 {
 	++chunkTopologyVersion;
@@ -874,6 +883,7 @@ bool ChunkProvider::isChunkGenerationPending(int_t i, int_t j) const
 
 Chunk *ChunkProvider::provideChunk(int_t i, int_t j)
 {
+	PSP_CRUMB("generate %d,%d", i, j);
 	if (worldObj != nullptr && worldObj->isLimitedWorld())
 	{
 		const int_t minChunk = worldObj->getWorldInfo() != nullptr ? worldObj->getWorldInfo()->getLimitedWorldMinChunk() : -8;
@@ -978,6 +988,7 @@ Chunk *ChunkProvider::provideChunk(int_t i, int_t j)
 
 Chunk *ChunkProvider::loadChunkFromFile(int_t i, int_t j, bool &readFailed)
 {
+	PSP_CRUMB("load %d,%d", i, j);
 	readFailed = false;
 	if (chunkLoader == nullptr) return nullptr;
 	try
@@ -1012,6 +1023,7 @@ void ChunkProvider::saveExtraChunkData(Chunk *chunk)
 
 void ChunkProvider::saveChunkToFile(Chunk *chunk)
 {
+	PSP_CRUMB("save chunk %d,%d", 0, 0);
 	if (chunkLoader == nullptr || chunk == nullptr || chunk == blankChunk) return;
 	try
 	{
@@ -1026,6 +1038,7 @@ void ChunkProvider::saveChunkToFile(Chunk *chunk)
 
 void ChunkProvider::unloadChunk(std::uint64_t key, Chunk *chunk)
 {
+	PSP_CRUMB("unload chunk %d,%d", 0, 0);
 	(void)key; // no longer needed: last-access tracking moved onto Chunk itself
 	if (chunk == nullptr || chunk == blankChunk)
 		return;
@@ -1086,6 +1099,7 @@ bool ChunkProvider::isChunkPopulationPending(int_t i, int_t j) const
 
 void ChunkProvider::populate(IChunkProvider *ichunkprovider, int_t i, int_t j)
 {
+	PSP_CRUMB("populate %d,%d", i, j);
 #if PLATFORM_DEFERRED_POPULATE
 	while (!populateDeferredStep(i, j))
 	{
