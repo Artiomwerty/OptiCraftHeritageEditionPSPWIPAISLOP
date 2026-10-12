@@ -370,8 +370,8 @@ void GameSettings::loadOptions()
 	legacyCreative = true; // console-style creative inventory is the PSP default
 	{
 		// PSP steps: 2, 2.25, 2.75 and 3 chunks (default 2.25).
-		static const int_t steps[4] = {32, 36, 44, 48};
-		int_t best = 36, bestDiff = 1000;
+		static const int_t steps[4] = {32, 32, 32, 32};
+		int_t best = 32, bestDiff = 1000;
 		for (int_t v : steps)
 		{
 			const int_t d = ofRenderDistanceFine > v ? ofRenderDistanceFine - v : v - ofRenderDistanceFine;

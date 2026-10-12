@@ -483,7 +483,7 @@ void GameSettings::setOptionFloatValue(const EnumOptions *enumoptions, float f)
 #if defined(PSP_PLATFORM)
         {
             // PSP steps: 2, 2.25, 2.75 and 3 chunks.
-            static const int_t steps[4] = {32, 36, 44, 48};
+            static const int_t steps[4] = {32, 32, 32, 32}; // the PSP draws a fixed 2-chunk radius
             int_t best = steps[0];
             for (int_t v : steps)
                 if (std::abs(v - newDistance) < std::abs(best - newDistance)) best = v;

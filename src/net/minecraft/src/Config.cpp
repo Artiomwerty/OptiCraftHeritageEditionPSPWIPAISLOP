@@ -192,7 +192,11 @@ int_t Config::getMaxRenderDistanceFine()
 {
 #if defined(PS2_PLATFORM) || defined(WII_PLATFORM) || PLATFORM_PC_LEGACY
 	// PLATFORM_VISIBLE_CHUNK_RADIUS is authoritative on fixed-grid backends.
+#if defined(PSP_PLATFORM)
+	return limit(PLATFORM_VISIBLE_CHUNK_RADIUS * 16 + 16, 32, 256); // slider keeps a range; steps below pin it to 2 chunks
+#else
 	return limit(PLATFORM_VISIBLE_CHUNK_RADIUS * 16, 32, 256);
+#endif
 #else
 	return 256;
 #endif

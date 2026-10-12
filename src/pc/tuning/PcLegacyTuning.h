@@ -4,7 +4,7 @@
 // shortcuts are isolated here so the normal PC profile keeps vanilla behavior.
 #define PC_LEGACY_DEFAULT_RENDER_DISTANCE 2
 #ifdef PSP_PLATFORM
-#define PC_LEGACY_VISIBLE_CHUNK_RADIUS 3
+#define PC_LEGACY_VISIBLE_CHUNK_RADIUS 2
 #else
 #define PC_LEGACY_VISIBLE_CHUNK_RADIUS 4
 #endif
