@@ -352,6 +352,7 @@ void present()
     while (waits--)
         sceDisplayWaitVblankStart();
     sceGuSync(0, 0); // the frame must be complete before it is flipped to the screen
+    releaseDeferred();
     geSum += PspSystem::micros() - t1;
     g_pacer.presented(sceDisplayGetVcount());
     sceGuSwapBuffers();

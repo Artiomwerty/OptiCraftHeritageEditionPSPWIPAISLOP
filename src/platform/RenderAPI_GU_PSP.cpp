@@ -214,6 +214,12 @@ Texture *boundTex()
 // Reuse VRAM blocks of equal size freed by deleted textures.
 struct VramBlock { int offset; std::size_t bytes; };
 std::vector<VramBlock> g_vramFree;
+// The GE executes the frame's command list only when the frame is presented, and the list points at
+// vertex / texture memory rather than copying it. Anything freed mid-frame must therefore stay intact
+// until the frame has been drawn, or earlier draws read recycled memory (stretched quads, random
+// triangles). Freed blocks wait here and are released by PspGu::releaseDeferred() after the GE finishes.
+std::vector<void *> g_deferredFree;
+std::vector<VramBlock> g_vramPending;
 
 int vramTake(std::size_t bytes)
 {
@@ -230,9 +236,9 @@ int vramTake(std::size_t bytes)
 void releaseTextureStorage(Texture &t)
 {
     if (t.vramOffset >= 0)
-        g_vramFree.push_back({t.vramOffset, t.totalBytes});
+        g_vramPending.push_back({t.vramOffset, t.totalBytes});
     t.vramOffset = -1;
-    free(t.pixels);
+    if (t.pixels) g_deferredFree.push_back(t.pixels);
     t.pixels = nullptr;
     t.created = false;
 }
@@ -370,7 +376,7 @@ void geomRelease(PackedGeom *g)
     if (!g) return;
     if (--g->refs <= 0)
     {
-        free(g->verts);
+        if (g->verts) g_deferredFree.push_back(g->verts);
         delete g;
     }
 }
@@ -1141,7 +1147,7 @@ void renderResetResources()
     }
     g_textures.resize(1);
     g_freeTextureNames.clear();
-    g_vramFree.clear();
+    g_vramFree.clear(); g_vramPending.clear();
     PspGu::vramReset();
     g_boundTexture = 0;
     g_a.boundTex = -1;
@@ -1578,4 +1584,17 @@ void pspTraceBoundTexture(const char *tag)
     PspSystem::bootTrace("%s: tex id=%d %dx%d store=%dx%d clamp=%d blur=%d created=%d px0=%08x px1=%08x",
                          tag, g_boundTexture, t->w, t->h, t->tw, t->th, t->clamp, t->blur, t->created,
                          t->pixels ? t->pixels[0] : 0u, t->pixels ? t->pixels[t->tw * (t->h / 2) + t->w / 2] : 0u);
+}
+
+namespace PspGu
+{
+// Called by present() once the GE has finished the frame: now it is safe to recycle memory that was
+// released while the frame's command list was still being built.
+void releaseDeferred()
+{
+    for (void *p : g_deferredFree) free(p);
+    g_deferredFree.clear();
+    for (const VramBlock &b : g_vramPending) g_vramFree.push_back(b);
+    g_vramPending.clear();
+}
 }

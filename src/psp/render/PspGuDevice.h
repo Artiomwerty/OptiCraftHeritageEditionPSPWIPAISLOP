@@ -34,6 +34,8 @@ bool init();
 // when the user confirmed a changed text. Must be called between frames (not mid-render).
 bool oskEdit(const std::string &initial, const char *desc, int limit, std::string &out);
 bool isInitialized();
+// Frees vertex/texture memory that was released while the frame was being recorded (see RenderAPI_GU_PSP.cpp).
+void releaseDeferred();
 
 // Finishes the current list, waits for the GPU, waits for the pacer's vblank, flips, and starts
 // the next frame's list. Call once per game frame.
