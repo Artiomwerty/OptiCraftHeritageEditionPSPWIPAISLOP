@@ -14,7 +14,11 @@ inline bool g_honorCull = false;
 // Rendering experiments, read from render.ini beside the EBOOT (all off = normal behaviour):
 //   noindex=1 draw quads as plain triangle lists, texsync=1 flush the texture cache before every draw,
 //   flush=1 write back the whole data cache each frame, noclip=1 leave GE clip planes off.
-inline bool g_dbgNoIndex = false, g_dbgTexSync = false, g_dbgFlushAll = false, g_dbgNoClip = false;
+// render.ini: skip=bitmask of passes to leave out (1 sky, 2 entities, 4 particles, 8 block cracks, 16 translucent
+// terrain, 32 rain, 64 clouds, 128 hand, 256 opaque terrain); near=<float> camera near plane.
+inline unsigned g_dbgSkip = 0;
+inline float g_nearPlane = 0.3f;
+inline bool g_dbgNoIndex = true, g_dbgTexSync = true, g_dbgFlushAll = false, g_dbgNoClip = false;
 constexpr int kScreenWidth = 480;
 constexpr int kScreenHeight = 272;
 constexpr int kBufferWidth = 512;

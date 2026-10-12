@@ -88,6 +88,14 @@
 #include "VirtualKeyboard.h"
 #endif
 
+#if defined(PSP_PLATFORM)
+#include "psp/render/PspGuDevice.h"
+#define DBG_SKIP(bit) ((PspGu::g_dbgSkip & (bit)) != 0)
+#define DBG_NEAR (PspGu::g_nearPlane)
+#else
+#define DBG_SKIP(bit) false
+#define DBG_NEAR PLATFORM_NEAR_PLANE
+#endif
 #if PLATFORM_DIRECT_ANALOG_MOVEMENT
 #include "platform/Input.h"
 #endif
@@ -1057,13 +1065,13 @@ void EntityRenderer::setupCameraTransform(float partialTicks, int anaglyphPass)
         
         perspectiveGL(getFOVModifier(partialTicks, true),
                       projectionAspect,
-                      PLATFORM_NEAR_PLANE, farPlaneDistance * 2.0f);
+                      DBG_NEAR, farPlaneDistance * 2.0f);
     }
     else
     {
         perspectiveGL(getFOVModifier(partialTicks, true),
                       projectionAspect,
-                      PLATFORM_NEAR_PLANE, farPlaneDistance * 2.0f);
+                      DBG_NEAR, farPlaneDistance * 2.0f);
     }
     
     if (mc->playerController != nullptr && mc->playerController->func_35643_e())
@@ -1136,7 +1144,7 @@ void EntityRenderer::renderHand(float partialTicks, int anaglyphPass)
 
     perspectiveGL(getFOVModifier(partialTicks, false),
                   currentProjectionAspect,
-                  PLATFORM_NEAR_PLANE, farPlaneDistance * 2.0f);
+                  DBG_NEAR, farPlaneDistance * 2.0f);
 
     if (mc->playerController != nullptr && mc->playerController->func_35643_e())
         renderScale(1.0f, 2.0f / 3.0f, 1.0f);
@@ -1771,7 +1779,7 @@ void EntityRenderer::renderWorld(float partialTicks, int64_t renderTimeLimitNano
 #if PLATFORM_PROFILE_RENDER_PHASES
             const std::uint32_t cycSky = platformProfileRenderPhaseBegin();
 #endif
-            renderglobal->renderSky(partialTicks);
+            if (!DBG_SKIP(1)) renderglobal->renderSky(partialTicks);
 #if PLATFORM_PROFILE_RENDER_PHASES
             platformProfileRenderPhaseEnd(cycSky, PlatformRenderPhase::Sky);
 #endif
@@ -1850,7 +1858,7 @@ void EntityRenderer::renderWorld(float partialTicks, int64_t renderTimeLimitNano
 #if PLATFORM_PS2 && MC_LOG_LEVEL > 2
         const PlatformDrawSnapshot opaqueDrawStart = platformProfileDrawSnapshot();
 #endif
-        renderglobal->sortAndRender(entityliving, 0, partialTicks);
+        if (!DBG_SKIP(256)) renderglobal->sortAndRender(entityliving, 0, partialTicks);
         if (terrainOpaquePass)
             renderTerrainEndPass(RenderTerrainPass::Opaque);
 #if PLATFORM_PROFILE_RENDER_PHASES
@@ -1871,7 +1879,7 @@ void EntityRenderer::renderWorld(float partialTicks, int64_t renderTimeLimitNano
         const PlatformDrawSnapshot entitiesDrawStart = platformProfileDrawSnapshot();
 #endif
 #if !PLATFORM_SKIP_WORLD_ENTITIES
-        renderglobal->renderEntities(entityliving->getPosition(partialTicks), &frustrum, partialTicks);
+        if (!DBG_SKIP(2)) renderglobal->renderEntities(entityliving->getPosition(partialTicks), &frustrum, partialTicks);
 #else
         // Low-cost profiles may skip ordinary world entities, but keep the
         // camera/player entity in third person so F5 remains usable.
@@ -1900,7 +1908,7 @@ void EntityRenderer::renderWorld(float partialTicks, int64_t renderTimeLimitNano
         
         // Particulas
 #if !PLATFORM_SKIP_WORLD_PARTICLES
-        effectrenderer->renderParticles(entityliving, partialTicks);
+        if (!DBG_SKIP(4)) effectrenderer->renderParticles(entityliving, partialTicks);
         disableLightmap(partialTicks);
 #if PLATFORM_PS2 && MC_LOG_LEVEL > 2
         platformProfileDrawCategory(PlatformDrawCategory::Particles, particlesDrawStart);
@@ -1919,7 +1927,7 @@ void EntityRenderer::renderWorld(float partialTicks, int64_t renderTimeLimitNano
 #endif
             
             renderDisable(RenderCapability::AlphaTest);
-            renderglobal->drawBlockBreaking(entityplayer, mc->objectMouseOver, 0, 
+            if (!DBG_SKIP(8)) renderglobal->drawBlockBreaking(entityplayer, mc->objectMouseOver, 0, 
                                            entityplayer->inventory->getCurrentItem(), partialTicks);
 #if !PLATFORM_SKIP_BLOCK_SELECTION_BOX
             renderglobal->drawSelectionBox(entityplayer, mc->objectMouseOver, 0,
@@ -1973,7 +1981,7 @@ void EntityRenderer::renderWorld(float partialTicks, int64_t renderTimeLimitNano
                 renderColorMask(false, false, false, false);
             }
 #endif
-            int transparentCount = renderglobal->sortAndRender(entityliving, 1, partialTicks);
+            int transparentCount = DBG_SKIP(16) ? 0 : renderglobal->sortAndRender(entityliving, 1, partialTicks);
 #if PLATFORM_NATIVE_TERRAIN_PIPELINE
             if (nativeTransparentDepthPass)
                 renderTerrainEndPass(RenderTerrainPass::Translucent);
@@ -2035,7 +2043,7 @@ void EntityRenderer::renderWorld(float partialTicks, int64_t renderTimeLimitNano
                 renderDisable(RenderCapability::CullFace);
             }
 #endif
-            renderglobal->sortAndRender(entityliving, 1, partialTicks);
+            if (!DBG_SKIP(16)) renderglobal->sortAndRender(entityliving, 1, partialTicks);
 #if PLATFORM_NATIVE_TERRAIN_PIPELINE
             if (nativeTransparentPass)
                 renderTerrainEndPass(RenderTerrainPass::Translucent);
@@ -2068,7 +2076,7 @@ void EntityRenderer::renderWorld(float partialTicks, int64_t renderTimeLimitNano
         // avoids translating a known fixed state every frame.
 		renderTerrainBeginPass(terrainTexture, RenderTerrainPass::Translucent);
 		const std::uint32_t cycPass1 = platformProfileRenderPhaseBegin();
-		renderglobal->sortAndRender(entityliving, 1, partialTicks);
+		if (!DBG_SKIP(16)) renderglobal->sortAndRender(entityliving, 1, partialTicks);
 		renderTerrainEndPass(RenderTerrainPass::Translucent);
 		platformProfileRenderPhaseEnd(cycPass1, PlatformRenderPhase::Translucent);
 #endif
@@ -2090,7 +2098,7 @@ void EntityRenderer::renderWorld(float partialTicks, int64_t renderTimeLimitNano
 #endif
             
             renderDisable(RenderCapability::AlphaTest);
-            renderglobal->drawBlockBreaking(entityplayer1, mc->objectMouseOver, 0,
+            if (!DBG_SKIP(8)) renderglobal->drawBlockBreaking(entityplayer1, mc->objectMouseOver, 0,
                                            entityplayer1->inventory->getCurrentItem(), partialTicks);
 #if !PLATFORM_SKIP_BLOCK_SELECTION_BOX
             renderglobal->drawSelectionBox(entityplayer1, mc->objectMouseOver, 0,
@@ -2108,7 +2116,7 @@ void EntityRenderer::renderWorld(float partialTicks, int64_t renderTimeLimitNano
 #if PLATFORM_PS2 && MC_LOG_LEVEL > 2
         const PlatformDrawSnapshot weatherDrawStart = platformProfileDrawSnapshot();
 #endif
-        renderRainSnow(partialTicks);
+        if (!DBG_SKIP(32)) renderRainSnow(partialTicks);
 #if PLATFORM_PS2 && MC_LOG_LEVEL > 2
         platformProfileDrawCategory(PlatformDrawCategory::Weather, weatherDrawStart);
 #endif
@@ -2122,7 +2130,7 @@ void EntityRenderer::renderWorld(float partialTicks, int64_t renderTimeLimitNano
 #if PLATFORM_PS2 && MC_LOG_LEVEL > 2
         const PlatformDrawSnapshot cloudsDrawStart = platformProfileDrawSnapshot();
 #endif
-        renderglobal->renderClouds(partialTicks);
+        if (!DBG_SKIP(64)) renderglobal->renderClouds(partialTicks);
 #if PLATFORM_PS2 && MC_LOG_LEVEL > 2
         platformProfileDrawCategory(PlatformDrawCategory::Clouds, cloudsDrawStart);
 #endif
@@ -2142,7 +2150,7 @@ void EntityRenderer::renderWorld(float partialTicks, int64_t renderTimeLimitNano
 #if PLATFORM_PS2 && MC_LOG_LEVEL > 2
             const PlatformDrawSnapshot handDrawStart = platformProfileDrawSnapshot();
 #endif
-            renderHand(partialTicks, eye);
+            if (!DBG_SKIP(128)) renderHand(partialTicks, eye);
 #if PLATFORM_PROFILE_RENDER_PHASES
             platformProfileRenderPhaseEnd(cycHand, PlatformRenderPhase::Hand);
 #endif
