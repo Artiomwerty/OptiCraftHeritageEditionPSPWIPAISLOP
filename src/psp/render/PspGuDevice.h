@@ -17,6 +17,7 @@ inline bool g_honorCull = false;
 // render.ini: skip=bitmask of passes to leave out (1 sky, 2 entities, 4 particles, 8 block cracks, 16 translucent
 // terrain, 32 rain, 64 clouds, 128 hand, 256 opaque terrain); near=<float> camera near plane.
 inline unsigned g_dbgSkip = 0;
+inline bool g_dbgDefer = true; // render.ini defer=0 frees vertex/texture memory immediately (old behaviour)
 inline float g_nearPlane = 0.3f;
 inline bool g_dbgNoIndex = true, g_dbgTexSync = true, g_dbgFlushAll = false, g_dbgNoClip = false;
 constexpr int kScreenWidth = 480;

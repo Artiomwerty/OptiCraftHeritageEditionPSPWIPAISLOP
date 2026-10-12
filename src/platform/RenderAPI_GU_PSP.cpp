@@ -236,9 +236,9 @@ int vramTake(std::size_t bytes)
 void releaseTextureStorage(Texture &t)
 {
     if (t.vramOffset >= 0)
-        g_vramPending.push_back({t.vramOffset, t.totalBytes});
+        { if (PspGu::g_dbgDefer) g_vramPending.push_back({t.vramOffset, t.totalBytes}); else g_vramFree.push_back({t.vramOffset, t.totalBytes}); }
     t.vramOffset = -1;
-    if (t.pixels) g_deferredFree.push_back(t.pixels);
+    if (t.pixels) { if (PspGu::g_dbgDefer) g_deferredFree.push_back(t.pixels); else free(t.pixels); }
     t.pixels = nullptr;
     t.created = false;
 }
@@ -376,7 +376,7 @@ void geomRelease(PackedGeom *g)
     if (!g) return;
     if (--g->refs <= 0)
     {
-        if (g->verts) g_deferredFree.push_back(g->verts);
+        if (g->verts) { if (PspGu::g_dbgDefer) g_deferredFree.push_back(g->verts); else free(g->verts); }
         delete g;
     }
 }
@@ -729,8 +729,8 @@ void submit(const PackedGeom &g)
     }
     const int vtype = GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D | (g.lit ? GU_NORMAL_8BIT : 0);
     const std::size_t vsize = PspPack::vertexBytes(g.lit);
-    if (PspGu::g_dbgTexSync) { sceGuTexFlush(); sceGuTexSync(); }
-    if (g.prim == PspPack::Prim::QuadsIndexed && PspGu::g_dbgNoIndex)
+    if (PspGu::g_dbgTexSync && g.vertexCount <= 4096) { sceGuTexFlush(); sceGuTexSync(); }
+    if (g.prim == PspPack::Prim::QuadsIndexed && PspGu::g_dbgNoIndex && g.vertexCount <= 4096)
     {
         // Experiment (render.ini noindex=1): expand quads to a plain triangle list, no index buffer.
         const int quads = g.vertexCount / 4;

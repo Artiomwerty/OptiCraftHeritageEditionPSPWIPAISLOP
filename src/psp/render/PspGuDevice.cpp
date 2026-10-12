@@ -201,9 +201,10 @@ static void loadRenderIni()
     PspGu::g_dbgTexSync = std::strstr(buf, "texsync=0") == nullptr;
     PspGu::g_dbgFlushAll = std::strstr(buf, "flush=1") != nullptr;
     PspGu::g_dbgNoClip = std::strstr(buf, "noclip=1") != nullptr;
+    PspGu::g_dbgDefer = std::strstr(buf, "defer=0") == nullptr;
     if (const char *k = std::strstr(buf, "skip=")) PspGu::g_dbgSkip = static_cast<unsigned>(std::atoi(k + 5));
     if (const char *k = std::strstr(buf, "near=")) { const float v = static_cast<float>(std::atof(k + 5)); if (v >= 0.05f && v <= 4.0f) PspGu::g_nearPlane = v; }
-    PspSystem::bootTrace("render.ini: skip=%u near=%.2f noindex=%d texsync=%d flush=%d noclip=%d\n", PspGu::g_dbgSkip, (double)PspGu::g_nearPlane, PspGu::g_dbgNoIndex, PspGu::g_dbgTexSync, PspGu::g_dbgFlushAll, PspGu::g_dbgNoClip);
+    PspSystem::bootTrace("render.ini: defer=%d skip=%u near=%.2f noindex=%d texsync=%d flush=%d noclip=%d\n", PspGu::g_dbgDefer, PspGu::g_dbgSkip, (double)PspGu::g_nearPlane, PspGu::g_dbgNoIndex, PspGu::g_dbgTexSync, PspGu::g_dbgFlushAll, PspGu::g_dbgNoClip);
 }
 
 bool init()
