@@ -20,6 +20,13 @@ void bootTrace(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 // Writes a CRASH line (epc/ra/badvaddr) to boot.log on a fatal exception.
 void installCrashHandler();
 
+// In-memory breadcrumb ring (no file I/O): remembers the last 16 events. Dumped by the crash handler
+// and the hang watchdog. Cheap enough to call from hot paths.
+void crumb(const char *tag, int a, int b);
+// Called once per presented frame; the watchdog thread logs a HANG line if it stops advancing.
+void heartbeat();
+void startWatchdog();
+
 // Leaves to the XMB. Safe to call from any thread.
 void exitGame();
 }

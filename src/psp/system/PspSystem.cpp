@@ -84,6 +84,73 @@ void bootTrace(const char *fmt, ...)
 }
 
 #include <pspdebug.h>
+#include <pspthreadman.h>
+#include <malloc.h>
+
+namespace {
+struct CrumbEntry { const char *tag; int a; int b; unsigned t; };
+CrumbEntry g_ring[16];
+volatile unsigned g_ringPos = 0;
+volatile unsigned g_beat = 0;
+}
+
+void crumb(const char *tag, int a, int b)
+{
+    const unsigned i = g_ringPos++;
+    CrumbEntry &e = g_ring[i & 15];
+    e.tag = tag; e.a = a; e.b = b; e.t = (unsigned)millis();
+}
+
+void heartbeat() { ++g_beat; }
+
+static int dumpRing(char *out, int cap)
+{
+    int n = 0;
+    const unsigned pos = g_ringPos;
+    for (unsigned k = 0; k < 16 && k < pos; ++k)
+    {
+        const CrumbEntry &e = g_ring[(pos - 1 - k) & 15];
+        if (e.tag == nullptr) continue;
+        const int w = snprintf(out + n, cap - n, " [%u %s %d,%d]", e.t, e.tag, e.a, e.b);
+        if (w <= 0 || w >= cap - n) break;
+        n += w;
+    }
+    return n;
+}
+
+static int watchdogMain(SceSize, void *)
+{
+    unsigned last = g_beat;
+    int stalled = 0, reports = 0;
+    for (;;)
+    {
+        sceKernelDelayThread(1000 * 1000);
+        const unsigned now = g_beat;
+        if (now != last) { last = now; stalled = 0; continue; }
+        ++stalled;
+        if (stalled >= 5 && (stalled - 5) % 10 == 0 && reports < 4)
+        {
+            ++reports;
+            const struct mallinfo mi = mallinfo();
+            char text[700];
+            int n = snprintf(text, sizeof(text), "%8u ms  HANG: no frame for %d s, heap used %u KB, arena %u KB, last:",
+                (unsigned)millis(), stalled, (unsigned)(mi.uordblks / 1024), (unsigned)(mi.arena / 1024));
+            n += dumpRing(text + n, (int)sizeof(text) - n - 2);
+            text[n++] = '\n';
+            char path[300];
+            snprintf(path, sizeof(path), "%s/boot.log", g_appDir.empty() ? "ms0:/PSP/GAME/OptiCraft" : g_appDir.c_str());
+            rawWrite(path, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_APPEND, text, n);
+        }
+    }
+    return 0;
+}
+
+void startWatchdog()
+{
+    const int th = sceKernelCreateThread("watchdog", watchdogMain, 0x70, 0x1000, PSP_THREAD_ATTR_USER, nullptr);
+    if (th >= 0) sceKernelStartThread(th, 0, nullptr);
+}
+
 static void crashHandler(PspDebugRegBlock *r)
 {
     char text[600];
@@ -95,6 +162,13 @@ static void crashHandler(PspDebugRegBlock *r)
     char path[300];
     snprintf(path, sizeof(path), "%s/boot.log", g_appDir.empty() ? "ms0:/PSP/GAME/OptiCraft" : g_appDir.c_str());
     if (n > 0) rawWrite(path, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_APPEND, text, n);
+    {
+        char r[500];
+        int m = snprintf(r, sizeof(r), "             last:");
+        m += dumpRing(r + m, (int)sizeof(r) - m - 2);
+        r[m++] = '\n';
+        rawWrite(path, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_APPEND, r, m);
+    }
     pspDebugScreenInit();
     pspDebugScreenPrintf("%s\nCrash logged to boot.log. Press any button/wait to exit.", text);
     sceKernelDelayThread(8 * 1000 * 1000);

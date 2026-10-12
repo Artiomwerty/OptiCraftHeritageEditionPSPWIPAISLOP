@@ -358,6 +358,7 @@ void present()
     g_pacer.presented(sceDisplayGetVcount());
     sceGuSwapBuffers();
     maybeScreenshot();
+    PspSystem::heartbeat();
     lastReturn = PspSystem::micros();
 
     ++g_stats.frames;
