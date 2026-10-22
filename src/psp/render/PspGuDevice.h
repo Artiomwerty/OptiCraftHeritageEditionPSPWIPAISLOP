@@ -17,7 +17,7 @@ inline bool g_honorCull = false;
 // render.ini: skip=bitmask of passes to leave out (1 sky, 2 entities, 4 particles, 8 block cracks, 16 translucent
 // terrain, 32 rain, 64 clouds, 128 hand, 256 opaque terrain); near=<float> camera near plane.
 inline unsigned g_dbgSkip = 0;
-inline bool g_dbgDefer = true; // render.ini defer=0 frees vertex/texture memory immediately (old behaviour)
+inline bool g_dbgDefer = false; // render.ini defer=1: free vertex/texture memory only after the frame (test96; caused flicker)
 inline float g_nearPlane = 0.3f;
 inline bool g_dbgNoIndex = true, g_dbgTexSync = true, g_dbgFlushAll = false, g_dbgNoClip = false;
 constexpr int kScreenWidth = 480;
@@ -45,6 +45,10 @@ void present();
 // Per-frame scratch memory the GE can read (16-byte aligned, valid until the next present()).
 // Returns nullptr when the arena is exhausted (the caller drops the draw).
 void *frameAlloc(std::size_t bytes);
+// Writes the arena bytes allocated since the last call out of the CPU data cache. The GE starts drawing
+// each primitive as soon as sceGuDrawArray is issued (GU_DIRECT advances the stall address), so this
+// must run right before every draw that reads arena memory, not only at present().
+void flushArena();
 
 // Frame statistics for the on-screen / log report.
 struct Stats

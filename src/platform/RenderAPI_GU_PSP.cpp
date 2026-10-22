@@ -742,6 +742,7 @@ void submit(const PackedGeom &g)
             for (int q = 0; q < quads; ++q)
                 for (int k = 0; k < 6; ++k)
                     std::memcpy(tri + (static_cast<std::size_t>(q) * 6 + k) * vsize, srcv + (static_cast<std::size_t>(q) * 4 + order[k]) * vsize, vsize);
+            PspGu::flushArena();
             sceGuDrawArray(GU_TRIANGLES, vtype, quads * 6, nullptr, tri);
             PspGu::countDraw(static_cast<unsigned>(g.vertexCount));
             return;
@@ -750,6 +751,7 @@ void submit(const PackedGeom &g)
     if (g.prim == PspPack::Prim::QuadsIndexed)
     {
         if (!ensureQuadIndices()) return;
+        PspGu::flushArena();
         int quads = g.vertexCount / 4;
         const unsigned char *base = static_cast<const unsigned char *>(vertsToDraw);
         while (quads > 0)
@@ -773,6 +775,7 @@ void submit(const PackedGeom &g)
     case PspPack::Prim::TriangleFan: gePrim = GU_TRIANGLE_FAN; break;
     default: break;
     }
+    PspGu::flushArena();
     sceGuDrawArray(gePrim, vtype, g.vertexCount, nullptr, vertsToDraw);
     PspGu::countDraw(static_cast<unsigned>(g.vertexCount));
 }
@@ -1223,6 +1226,7 @@ void renderClear(unsigned int mask)
     sceGuClearColor(packColor(g_s.clearColor[0], g_s.clearColor[1], g_s.clearColor[2], g_s.clearColor[3]));
     sceGuClearDepth(static_cast<unsigned>((1.0f - g_s.clearDepth) * 65535.0f));
     sceGuClear(flags | (flags == (GU_COLOR_BUFFER_BIT | GU_DEPTH_BUFFER_BIT) ? GU_FAST_CLEAR_BIT : 0));
+    PspGu::countDraw(0); // a cleared frame is a real frame (see PspGu::present)
     // sceGuClear leaves the pipeline in an indeterminate state; re-send everything on the next draw.
     resetApplied();
 }

@@ -3467,7 +3467,9 @@ void World::updateEntities()
         }
         
 #if PLATFORM_PSP
-        // Distance-based tick rate for non-player mobs: >= 7 chunks away 15 ticks/s, >= 16 chunks away 9 ticks/s.
+        // Distance-based tick rate for non-player mobs. The PSP only draws 2 chunks around the player
+        // (fog at ~32 blocks), so: up to 24 blocks full rate, 24-40 blocks (in the fog) 10 ticks/s,
+        // past 40 blocks (not drawn at all) 4 ticks/s.
         bool pspSkipTick = false;
         if (!entity->isDead && !playerEntities.empty() && dynamic_cast<EntityLiving*>(entity) != nullptr &&
             dynamic_cast<EntityPlayer*>(entity) == nullptr)
@@ -3480,7 +3482,7 @@ void World::updateEntities()
                 const double dd = ddx > ddz ? ddx : ddz;
                 if (dd < best) best = dd;
             }
-            const int rate = best >= 256.0 ? 9 : (best >= 112.0 ? 15 : 20);
+            const int rate = best >= 40.0 ? 4 : (best >= 24.0 ? 10 : 20);
             if (rate < 20)
             {
                 const unsigned t = pspEntityTickCounter + (unsigned)entity->entityId;

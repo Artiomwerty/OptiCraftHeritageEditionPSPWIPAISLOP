@@ -15,6 +15,9 @@
 #include "psp/PspFramePacer.h"
 #include "psp/system/PspSystem.h"
 namespace PspProfile { void dump(); }
+extern volatile unsigned g_pspAudioBlocks;
+extern volatile int g_pspAudioLastError;
+extern volatile int g_pspAudioVoices;
 
 namespace
 {
@@ -23,6 +26,7 @@ constexpr std::size_t kArenaBytes = 1536 * 1024;
 unsigned char *g_arena[2] = {nullptr, nullptr};
 int g_arenaIndex = 0;
 std::size_t g_arenaUsed = 0;
+std::size_t g_arenaFlushed = 0;
 bool g_init = false;
 PspFramePacer g_pacer(2);
 PspGu::Prof g_prof;
@@ -201,7 +205,7 @@ static void loadRenderIni()
     PspGu::g_dbgTexSync = std::strstr(buf, "texsync=0") == nullptr;
     PspGu::g_dbgFlushAll = std::strstr(buf, "flush=1") != nullptr;
     PspGu::g_dbgNoClip = std::strstr(buf, "noclip=1") != nullptr;
-    PspGu::g_dbgDefer = std::strstr(buf, "defer=0") == nullptr;
+    PspGu::g_dbgDefer = std::strstr(buf, "defer=1") != nullptr;
     if (const char *k = std::strstr(buf, "skip=")) PspGu::g_dbgSkip = static_cast<unsigned>(std::atoi(k + 5));
     if (const char *k = std::strstr(buf, "near=")) { const float v = static_cast<float>(std::atof(k + 5)); if (v >= 0.05f && v <= 4.0f) PspGu::g_nearPlane = v; }
     PspSystem::bootTrace("render.ini: defer=%d skip=%u near=%.2f noindex=%d texsync=%d flush=%d noclip=%d\n", PspGu::g_dbgDefer, PspGu::g_dbgSkip, (double)PspGu::g_nearPlane, PspGu::g_dbgNoIndex, PspGu::g_dbgTexSync, PspGu::g_dbgFlushAll, PspGu::g_dbgNoClip);
@@ -322,8 +326,25 @@ void present()
     if (!g_init)
         return;
 
+    // A frame that drew and cleared nothing would flip a back buffer still holding a picture from two
+    // frames ago (the world list flashing over the loading screen). Run the list, but keep showing the
+    // current front buffer.
+    if (g_stats.drawCalls == 0)
+    {
+        flushArena();
+        sceGuFinish();
+        sceGuSync(0, 0);
+        releaseDeferred();
+        g_arenaIndex ^= 1;
+        g_arenaUsed = 0;
+        g_arenaFlushed = 0;
+        PspSystem::heartbeat();
+        sceGuStart(GU_DIRECT, g_list);
+        return;
+    }
+
     // Make the CPU-written vertex data visible to the GE, then run the frame.
-    if (g_dbgFlushAll) sceKernelDcacheWritebackAll(); else sceKernelDcacheWritebackRange(g_arena[g_arenaIndex], g_arenaUsed);
+    if (g_dbgFlushAll) sceKernelDcacheWritebackAll(); else flushArena();
     // Frame profile for boot.log: how long the CPU took to build the frame vs how long the GE
     // then needed to draw it (the two are not overlapped yet).
     static std::uint64_t lastEnd = 0, geSum = 0, frameSum = 0, workSum = 0, lastReturn = 0;
@@ -342,7 +363,7 @@ void present()
                                  (unsigned)(workSum / 120), g_prof.tick / 120, g_prof.light / 120, g_prof.render / 120,
                                  g_prof.display / 120, (unsigned)(geSum / 120),
                                  g_stats.lastDrawCalls, g_stats.lastVertices, g_prof.gui, g_prof.world / 120, g_prof.overlay / 120, g_prof.clear / 120, g_prof.screen / 120);
-            { const struct mallinfo mi = mallinfo(); PspSystem::bootTrace("mem: heap used %u KB, arena %u KB, arenaDrops %u\n", (unsigned)(mi.uordblks / 1024), (unsigned)(mi.arena / 1024), (unsigned)g_stats.arenaDrops); }
+            { const struct mallinfo mi = mallinfo(); PspSystem::bootTrace("mem: heap used %u KB, arena %u KB, arenaDrops %u, audio blocks %u voices %d err %d\n", (unsigned)(mi.uordblks / 1024), (unsigned)(mi.arena / 1024), (unsigned)g_stats.arenaDrops, (unsigned)g_pspAudioBlocks, (int)g_pspAudioVoices, (int)g_pspAudioLastError); }
             PspProfile::dump();
             g_prof = Prof();
             workSum = 0;
@@ -377,6 +398,7 @@ void present()
 
     g_arenaIndex ^= 1;
     g_arenaUsed = 0;
+    g_arenaFlushed = 0;
     sceGuStart(GU_DIRECT, g_list);
 }
 
@@ -391,6 +413,14 @@ void *frameAlloc(std::size_t bytes)
     void *p = g_arena[g_arenaIndex] + g_arenaUsed;
     g_arenaUsed += aligned;
     return p;
+}
+
+void flushArena()
+{
+    if (g_arenaUsed <= g_arenaFlushed)
+        return;
+    sceKernelDcacheWritebackRange(g_arena[g_arenaIndex] + g_arenaFlushed, g_arenaUsed - g_arenaFlushed);
+    g_arenaFlushed = g_arenaUsed;
 }
 
 const Stats &stats() { return g_stats; }

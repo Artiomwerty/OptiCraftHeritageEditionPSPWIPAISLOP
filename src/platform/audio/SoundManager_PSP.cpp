@@ -12,6 +12,9 @@
 #include "net/minecraft/src/SoundManager.h"
 #include "net/minecraft/src/EntityLiving.h"
 #include "net/minecraft/src/GameSettings.h"
+volatile unsigned g_pspAudioBlocks = 0;
+volatile int g_pspAudioLastError = 0;
+volatile int g_pspAudioVoices = 0;
 void *SoundManager::sndSystem = nullptr;
 bool SoundManager::loaded = false;
 SoundManager::SoundManager() : soundVolume(0), options(nullptr), ticksBeforeMusic(0) {}
@@ -70,6 +73,13 @@ AudioListenerState *g_listenerPtr = nullptr;
 float g_soundVolume = 1.0f;
 float g_musicVolume = 1.0f;
 bool g_started = false;
+} // namespace
+// Mixer heartbeat for the perf line in boot.log: blocks handed to the hardware, last output error.
+volatile unsigned g_pspAudioBlocks = 0;
+volatile int g_pspAudioLastError = 0;
+volatile int g_pspAudioVoices = 0;
+namespace
+{
 
 // ------------------------------------------------------------------------------- samples ---
 
@@ -468,7 +478,22 @@ int mixerThread(SceSize, void *)
             prevL = static_cast<std::int16_t>(l);
             prevR = static_cast<std::int16_t>(r);
         }
-        sceAudioOutputBlocking(ch, PSP_AUDIO_VOLUME_MAX, g_out);
+        sceKernelDcacheWritebackRange(g_out, sizeof(std::int16_t) * kBlockFrames * 4);
+        {
+            int nv = 0;
+            for (int vi = 0; vi < kVoices; ++vi) nv += g_voices[vi].active ? 1 : 0;
+            g_pspAudioVoices = nv;
+        }
+        const int orc = sceAudioOutputBlocking(ch, PSP_AUDIO_VOLUME_MAX, g_out);
+        ++g_pspAudioBlocks;
+        if (orc < 0)
+        {
+            // Never spin at this priority: an output error would starve the game.
+            static int errLogged = 0;
+            g_pspAudioLastError = orc;
+            if (errLogged < 6) { ++errLogged; PspSystem::bootTrace("audio: output error 0x%08x", (unsigned)orc); }
+            sceKernelDelayThread(20000);
+        }
         {
             // Gap diagnostics: how late the next block was handed over.
             static std::uint64_t lastT = 0;
@@ -582,6 +607,7 @@ void SoundManager::playRandomMusicIfReady()
     }
     if (!g_pendingDisc.empty() || g_discActive)
         return;
+    if (options) g_musicVolume = options->musicVolume;
     if (!g_started || !options || options->musicVolume <= 0.0f)
         return;
     if (running || now < nextAllowedUs)
@@ -632,6 +658,7 @@ void SoundManager::playSound(const jstring &s, float x, float y, float z, float 
     SoundPoolEntry *entry = soundPoolSounds.getRandomSoundFromSoundPool(s);
     if (!entry)
         return;
+    g_soundVolume = options->soundVolume;
     const float att = audioSpatialAttenuation(g_listener, x, y, z, volume);
     if (att <= 0.0f)
         return;
@@ -642,9 +669,14 @@ void SoundManager::playSoundFX(const jstring &s, float volume, float)
 {
     if (!g_started || !options || options->soundVolume <= 0.0f)
         return;
+    g_soundVolume = options->soundVolume;
     SoundPoolEntry *entry = soundPoolSounds.getRandomSoundFromSoundPool(s);
     if (entry)
+    {
+        static int traced = 0;
+        if (traced < 3) { ++traced; PspSystem::bootTrace("audio: fx vol=%.2f sound=%.2f music=%.2f blocks=%u", (double)volume, (double)options->soundVolume, (double)options->musicVolume, (unsigned)g_pspAudioBlocks); }
         startVoice(loadSample(entry->soundUrl), std::min(volume, 1.0f) * 0.5f * g_soundVolume);
+    }
 }
 
 #endif // PSP_NO_AUDIO

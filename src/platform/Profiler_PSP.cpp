@@ -10,7 +10,7 @@
 namespace
 {
 struct Slot { const char *name; long long ns; unsigned calls; };
-Slot g_slots[24];
+Slot g_slots[40];
 int g_count = 0;
 
 void note(const char *name, long long ns)
@@ -24,7 +24,7 @@ void note(const char *name, long long ns)
             return;
         }
     }
-    if (g_count < 24)
+    if (g_count < 40)
         g_slots[g_count++] = {name, ns, 1};
 }
 }
@@ -33,12 +33,18 @@ namespace PspProfile
 {
 void dump()
 {
-    char line[420];
+    // boot.log lines are capped at ~300 characters, so the list is split over several lines.
+    char line[280];
     int n = std::snprintf(line, sizeof(line), "phases(ms/window):");
-    for (int i = 0; i < g_count && n < (int)sizeof(line) - 40; ++i)
+    for (int i = 0; i < g_count; ++i)
     {
         if (g_slots[i].ns < 200000) // < 0.2 ms: not interesting
             continue;
+        if (n > 220)
+        {
+            PspSystem::bootTrace("%s\n", line);
+            n = std::snprintf(line, sizeof(line), "phases+:");
+        }
         n += std::snprintf(line + n, sizeof(line) - n, " %s=%lld(%u)", g_slots[i].name, g_slots[i].ns / 1000000, g_slots[i].calls);
     }
     PspSystem::bootTrace("%s\n", line);
