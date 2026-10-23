@@ -32,6 +32,40 @@ PspFramePacer g_pacer(2);
 PspGu::Prof g_prof;
 PspGu::Stats g_stats;
 std::size_t g_vramNext = 0;
+// Presentation diagnostics (boot.log "frames:" line).
+struct FrameDiag { unsigned empty = 0, emptyRun = 0, maxEmptyRun = 0, startFail = 0, syncErr = 0, dispMismatch = 0, sameBuf = 0; };
+FrameDiag g_diag;
+struct CallerDiag { void *ra = nullptr; unsigned frames = 0, empty = 0; };
+CallerDiag g_callers[8];
+
+void noteCaller(bool empty)
+{
+    void *ra = PspGu::g_presentCaller;
+    PspGu::g_presentCaller = nullptr;
+    for (CallerDiag &c : g_callers)
+    {
+        if (c.ra == ra || c.ra == nullptr)
+        {
+            c.ra = ra;
+            ++c.frames;
+            if (empty) ++c.empty;
+            return;
+        }
+    }
+}
+
+void dumpCallers()
+{
+    char line[260];
+    int n = std::snprintf(line, sizeof(line), "present callers (ra frames/empty):");
+    for (const CallerDiag &c : g_callers)
+    {
+        if (!c.ra) break;
+        n += std::snprintf(line + n, sizeof(line) - n, " %p %u/%u", c.ra, c.frames, c.empty);
+        if (n > 220) break;
+    }
+    PspSystem::bootTrace("%s\n", line);
+}
 }
 
 extern void pspRenderInvalidateState();
@@ -206,9 +240,10 @@ static void loadRenderIni()
     PspGu::g_dbgFlushAll = std::strstr(buf, "flush=1") != nullptr;
     PspGu::g_dbgNoClip = std::strstr(buf, "noclip=1") != nullptr;
     PspGu::g_dbgDefer = std::strstr(buf, "defer=1") != nullptr;
+    PspGu::g_skipEmpty = std::strstr(buf, "skipempty=0") == nullptr;
     if (const char *k = std::strstr(buf, "skip=")) PspGu::g_dbgSkip = static_cast<unsigned>(std::atoi(k + 5));
     if (const char *k = std::strstr(buf, "near=")) { const float v = static_cast<float>(std::atof(k + 5)); if (v >= 0.05f && v <= 4.0f) PspGu::g_nearPlane = v; }
-    PspSystem::bootTrace("render.ini: defer=%d skip=%u near=%.2f noindex=%d texsync=%d flush=%d noclip=%d\n", PspGu::g_dbgDefer, PspGu::g_dbgSkip, (double)PspGu::g_nearPlane, PspGu::g_dbgNoIndex, PspGu::g_dbgTexSync, PspGu::g_dbgFlushAll, PspGu::g_dbgNoClip);
+    PspSystem::bootTrace("render.ini: skipempty=%d defer=%d skip=%u near=%.2f noindex=%d texsync=%d flush=%d noclip=%d\n", PspGu::g_skipEmpty, PspGu::g_dbgDefer, PspGu::g_dbgSkip, (double)PspGu::g_nearPlane, PspGu::g_dbgNoIndex, PspGu::g_dbgTexSync, PspGu::g_dbgFlushAll, PspGu::g_dbgNoClip);
 }
 
 bool init()
@@ -321,6 +356,28 @@ static void maybeScreenshot()
     free(bmp);
 }
 
+static void startList()
+{
+    int rc = sceGuStart(GU_DIRECT, g_list);
+    if (rc < 0)
+    {
+        ++g_diag.startFail;
+        if (g_diag.startFail <= 5)
+            PspSystem::bootTrace("present: sceGuStart failed 0x%08x\n", (unsigned)rc);
+    }
+}
+
+static void syncList()
+{
+    const int rc = sceGuSync(0, 0);
+    if (rc < 0)
+    {
+        ++g_diag.syncErr;
+        if (g_diag.syncErr <= 5)
+            PspSystem::bootTrace("present: sceGuSync error 0x%08x\n", (unsigned)rc);
+    }
+}
+
 void present()
 {
     if (!g_init)
@@ -329,19 +386,25 @@ void present()
     // A frame that drew and cleared nothing would flip a back buffer still holding a picture from two
     // frames ago (the world list flashing over the loading screen). Run the list, but keep showing the
     // current front buffer.
-    if (g_stats.drawCalls == 0)
+    noteCaller(g_stats.drawCalls == 0);
+    if (g_stats.drawCalls == 0 && g_skipEmpty)
     {
         flushArena();
         sceGuFinish();
-        sceGuSync(0, 0);
+        syncList();
         releaseDeferred();
         g_arenaIndex ^= 1;
         g_arenaUsed = 0;
         g_arenaFlushed = 0;
         PspSystem::heartbeat();
-        sceGuStart(GU_DIRECT, g_list);
+        ++g_diag.empty;
+        if (++g_diag.emptyRun == 30)
+            PspSystem::bootTrace("present: 30 empty frames in a row (nothing drawn, screen held)\n");
+        startList();
         return;
     }
+    if (g_diag.emptyRun > g_diag.maxEmptyRun) g_diag.maxEmptyRun = g_diag.emptyRun;
+    g_diag.emptyRun = 0;
 
     // Make the CPU-written vertex data visible to the GE, then run the frame.
     if (g_dbgFlushAll) sceKernelDcacheWritebackAll(); else flushArena();
@@ -364,6 +427,8 @@ void present()
                                  g_prof.display / 120, (unsigned)(geSum / 120),
                                  g_stats.lastDrawCalls, g_stats.lastVertices, g_prof.gui, g_prof.world / 120, g_prof.overlay / 120, g_prof.clear / 120, g_prof.screen / 120);
             { const struct mallinfo mi = mallinfo(); PspSystem::bootTrace("mem: heap used %u KB, arena %u KB, arenaDrops %u, audio blocks %u voices %d err %d\n", (unsigned)(mi.uordblks / 1024), (unsigned)(mi.arena / 1024), (unsigned)g_stats.arenaDrops, (unsigned)g_pspAudioBlocks, (int)g_pspAudioVoices, (int)g_pspAudioLastError); }
+            PspSystem::bootTrace("frames: empty %u (longest run %u), startFail %u, syncErr %u, dispMismatch %u, sameBuf %u\n", g_diag.empty, g_diag.maxEmptyRun, g_diag.startFail, g_diag.syncErr, g_diag.dispMismatch, g_diag.sameBuf);
+            dumpCallers();
             PspProfile::dump();
             g_prof = Prof();
             workSum = 0;
@@ -373,11 +438,27 @@ void present()
     unsigned waits = g_pacer.waitsNeeded(sceDisplayGetVcount());
     while (waits--)
         sceDisplayWaitVblankStart();
-    sceGuSync(0, 0); // the frame must be complete before it is flipped to the screen
+    syncList(); // the frame must be complete before it is flipped to the screen
     releaseDeferred();
     geSum += PspSystem::micros() - t1;
     g_pacer.presented(sceDisplayGetVcount());
-    sceGuSwapBuffers();
+    {
+        // Check that the display really points at the buffer just drawn and the GE moves on to the other.
+        const unsigned newDraw = reinterpret_cast<unsigned>(sceGuSwapBuffers()) & 0x1FFFFFu;
+        void *top = nullptr; int bw = 0, fmt = 0;
+        sceDisplayGetFrameBuf(&top, &bw, &fmt, PSP_DISPLAY_SETBUF_NEXTFRAME);
+        const unsigned disp = reinterpret_cast<unsigned>(top) & 0x1FFFFFu;
+        if (disp == newDraw)
+        {
+            ++g_diag.sameBuf;
+            if (g_diag.sameBuf <= 5) PspSystem::bootTrace("present: display and draw buffer are the same (%06x)\n", disp);
+        }
+        else if (disp != 0 && disp != kFrameBufferBytes)
+        {
+            ++g_diag.dispMismatch;
+            if (g_diag.dispMismatch <= 5) PspSystem::bootTrace("present: display shows unexpected buffer %06x (draw %06x)\n", disp, newDraw);
+        }
+    }
     maybeScreenshot();
     PspSystem::heartbeat();
     lastReturn = PspSystem::micros();
@@ -399,7 +480,7 @@ void present()
     g_arenaIndex ^= 1;
     g_arenaUsed = 0;
     g_arenaFlushed = 0;
-    sceGuStart(GU_DIRECT, g_list);
+    startList();
 }
 
 void *frameAlloc(std::size_t bytes)

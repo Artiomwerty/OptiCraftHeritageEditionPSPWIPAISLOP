@@ -94,11 +94,16 @@ static void menuCursor()
 	pspRenderInvalidateState();
 }
 
-void swapBuffers() { PspGu::present(); }
-
-void update(bool doProcessMessages)
+void __attribute__((noinline)) swapBuffers()
 {
-	swapBuffers();
+	PspGu::g_presentCaller = __builtin_return_address(0);
+	PspGu::present();
+}
+
+void __attribute__((noinline)) update(bool doProcessMessages)
+{
+	PspGu::g_presentCaller = __builtin_return_address(0);
+	PspGu::present();
 	if (doProcessMessages)
 		processMessages();
 }
