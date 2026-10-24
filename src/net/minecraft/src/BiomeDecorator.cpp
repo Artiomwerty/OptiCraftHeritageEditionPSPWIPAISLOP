@@ -309,7 +309,9 @@ bool BiomeDecorator::advanceDecoration()
                 }
                 nextStage(DecorationStage::TreeSetup); break;
             case DecorationStage::TreeSetup:
-                if (currentWorld != nullptr && currentWorld->isLimitedWorld())
+                // PSP: infinite worlds use the same per-biome tree table as limited worlds. With the
+                // vanilla counts most of the PSP terrain is plains (-999 trees), i.e. bare grass.
+                if (currentWorld != nullptr && (currentWorld->isLimitedWorld() || PLATFORM_PSP))
                 {
                     // MCPE 0.6.0 / Pocket Edition classic tree distribution:
                     // In MCPE 0.6.0, every terrestrial biome has natural tree coverage.
@@ -383,7 +385,7 @@ bool BiomeDecorator::advanceDecoration()
                     const int_t x = JavaArithmetic::intAdd(JavaArithmetic::intAdd(chunk_X, randomGenerator->nextInt(16)), 8);
                     const int_t z = JavaArithmetic::intAdd(JavaArithmetic::intAdd(chunk_Z, randomGenerator->nextInt(16)), 8);
                     BiomeGenBase *treeBiome = biome;
-                    if (currentWorld != nullptr && currentWorld->isLimitedWorld() &&
+                    if (currentWorld != nullptr && (currentWorld->isLimitedWorld() || PLATFORM_PSP) &&
                         (biome == BiomeGenBase::plains || biome == BiomeGenBase::extremeHills || biome == BiomeGenBase::extremeHillsEdge))
                     {
                         // In MCPE 0.6.0, plains and hills have a mix of oak (75%) and birch (25%)

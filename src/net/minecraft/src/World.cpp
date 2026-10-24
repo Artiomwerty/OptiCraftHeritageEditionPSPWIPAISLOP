@@ -5163,7 +5163,12 @@ void World::func_48458_a(int_t chunkOriginX, int_t chunkOriginZ, Chunk *chunk)
         }
     }
 
+#if !PLATFORM_PSP
+    // Later-version relight sweep (not in 1.2.5): 8 columns x 16 blocks per call, each with six
+    // neighbour reads and up to three lighting updates. On the PSP it was the bulk of the random
+    // tick phase (6-19 ms per tick) for minutes after every chunk load; terrain is lit at generation.
     chunk->enqueueRelightChecks();
+#endif
 }
 
 void World::updateBlocksAndPlayCaveSounds()
