@@ -167,6 +167,11 @@ void TileEntityChest::checkForAdjacentChests()
 
 	auto getAdjacent = [this](int_t x, int_t y, int_t z) -> TileEntityChest *
 	{
+		// Only look at loaded chunks. getBlockId() on an unloaded one loads (or generates) it, and
+		// this runs from Chunk::onChunkUnload(): a chest beside an already unloaded chunk then
+		// re-inserted that chunk into the chunk map while the unload loop was walking it (crash).
+		if (!worldObj->blockExists(x, y, z))
+			return nullptr;
 		if (worldObj->getBlockId(x, y, z) != Block::chest->blockID)
 			return nullptr;
 		return dynamic_cast<TileEntityChest *>(worldObj->getBlockTileEntity(x, y, z));
