@@ -20,6 +20,7 @@ inline unsigned g_dbgSkip = 0;
 inline bool g_dbgDefer = false; // render.ini defer=1: free vertex/texture memory only after the frame (test96; caused flicker)
 inline float g_nearPlane = 0.3f;
 inline void *g_presentCaller = nullptr; // set by lwjgl::Display before present(), for boot.log diagnostics
+inline bool g_lateFlip = true; // render.ini lateflip=0: always wait for the vblank before flipping
 inline bool g_skipEmpty = true; // render.ini skipempty=0: flip even frames that drew nothing (test99 behaviour)
 inline bool g_dbgNoIndex = true, g_dbgTexSync = true, g_dbgFlushAll = false, g_dbgNoClip = false;
 constexpr int kScreenWidth = 480;
@@ -51,6 +52,9 @@ void *frameAlloc(std::size_t bytes);
 // each primitive as soon as sceGuDrawArray is issued (GU_DIRECT advances the stall address), so this
 // must run right before every draw that reads arena memory, not only at present().
 void flushArena();
+// Before the first draw/clear of a frame: if the last flip was issued without waiting for the vblank
+// and that vblank has not happened yet, wait for it (the GE would draw into the buffer on screen).
+void waitFlip();
 
 // Frame statistics for the on-screen / log report.
 struct Stats

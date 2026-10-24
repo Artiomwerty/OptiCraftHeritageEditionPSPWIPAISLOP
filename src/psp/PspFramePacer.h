@@ -34,6 +34,12 @@ public:
 		return elapsed >= m_n ? 1u : m_n - elapsed;
 	}
 
+	// True when the frame already missed its slot (presenting now would not be early).
+	bool late(unsigned vcountNow) const
+	{
+		return m_started && vcountNow - m_lastPresent >= m_n;
+	}
+
 	// Call with the vblank counter reached once the waits are done.
 	void presented(unsigned vcountAfter)
 	{

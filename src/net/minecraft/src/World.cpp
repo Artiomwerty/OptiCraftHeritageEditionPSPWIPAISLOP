@@ -52,6 +52,8 @@
 #include "ISaveHandler.h"
 #include "ChunkProvider.h"
 #include "EntityPlayer.h"
+#include "EntityItem.h"
+#include "EntityXPOrb.h"
 #include "ChunkProviderLoadOrGenerate.h"
 #include "MathHelper.h"
 #include "IChunkProvider.h"
@@ -3499,7 +3501,20 @@ void World::updateEntities()
 #if PLATFORM_PS2 && MC_LOG_LEVEL >= 2
             const std::uint32_t entityTickStart = platformProfileRenderPhaseBegin();
 #endif
+#if PLATFORM_PSP && PLATFORM_PROFILE_RENDER_PHASES
+            const long_t pspEntStartNs = System::nanoTime();
             updateEntity(entity);
+            {
+                // Where entity time goes (boot.log phases line): player, mobs, items/orbs, the rest.
+                const char *cat = dynamic_cast<EntityPlayer*>(entity) != nullptr ? "e:player"
+                                : dynamic_cast<EntityLiving*>(entity) != nullptr ? "e:mob"
+                                : (dynamic_cast<EntityItem*>(entity) != nullptr || dynamic_cast<EntityXPOrb*>(entity) != nullptr) ? "e:item"
+                                : "e:other";
+                platformProfileTickPhase(cat, System::nanoTime() - pspEntStartNs);
+            }
+#else
+            updateEntity(entity);
+#endif
 #if PLATFORM_PS2 && MC_LOG_LEVEL == 2
             platformProfileEntityTickWork(entityTickStart, entity);
 #elif PLATFORM_PS2 && MC_LOG_LEVEL > 2

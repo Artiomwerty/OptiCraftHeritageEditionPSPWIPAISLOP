@@ -1044,7 +1044,14 @@ void Minecraft::run()
                 const std::uint64_t pspDispT0 = PspSystem::micros();
 #endif
                 const long_t swapStartNs = System::nanoTime();
-                if (!lwjgl::Keyboard::isKeyDown(0x41))
+#if PLATFORM_PSP
+                // PSP presents right after rendering instead (see below): the flip then lands during
+                // the next tick, so a late frame never waits for the vblank.
+                const bool pspPresentAfterRender = true;
+#else
+                const bool pspPresentAfterRender = false;
+#endif
+                if (!pspPresentAfterRender && !lwjgl::Keyboard::isKeyDown(0x41))
                     lwjgl::Display::update();
 #if PLATFORM_PSP
                 PspGu::prof().display += (unsigned)(PspSystem::micros() - pspDispT0);
@@ -1127,8 +1134,16 @@ void Minecraft::run()
                 // tracked state only; nothing submits geometry.
                 renderSubmitFrame();
 
-                if (lwjgl::Keyboard::isKeyDown(0x41))
+                if (pspPresentAfterRender || lwjgl::Keyboard::isKeyDown(0x41))
+                {
+#if PLATFORM_PSP
+                    const std::uint64_t pspDispT1 = PspSystem::micros();
+#endif
                     lwjgl::Display::update();
+#if PLATFORM_PSP
+                    PspGu::prof().display += (unsigned)(PspSystem::micros() - pspDispT1);
+#endif
+                }
 
                 screenshotListener();
 

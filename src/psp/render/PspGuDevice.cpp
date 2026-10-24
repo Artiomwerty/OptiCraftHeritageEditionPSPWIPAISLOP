@@ -34,8 +34,10 @@ PspGu::Prof g_prof;
 PspGu::Stats g_stats;
 std::size_t g_vramNext = 0;
 // Presentation diagnostics (boot.log "frames:" line).
-struct FrameDiag { unsigned empty = 0, emptyRun = 0, maxEmptyRun = 0, startFail = 0, syncErr = 0, dispMismatch = 0, sameBuf = 0; };
+struct FrameDiag { unsigned empty = 0, emptyRun = 0, maxEmptyRun = 0, startFail = 0, syncErr = 0, dispMismatch = 0, sameBuf = 0, flipWaits = 0, lateFlips = 0; };
 FrameDiag g_diag;
+bool g_flipPending = false;
+unsigned g_flipVcount = 0;
 struct CallerDiag { void *ra = nullptr; unsigned frames = 0, empty = 0; };
 CallerDiag g_callers[8];
 
@@ -277,9 +279,10 @@ static void loadRenderIni()
     PspGu::g_dbgNoClip = std::strstr(buf, "noclip=1") != nullptr;
     PspGu::g_dbgDefer = std::strstr(buf, "defer=1") != nullptr;
     PspGu::g_skipEmpty = std::strstr(buf, "skipempty=0") == nullptr;
+    PspGu::g_lateFlip = std::strstr(buf, "lateflip=0") == nullptr;
     if (const char *k = std::strstr(buf, "skip=")) PspGu::g_dbgSkip = static_cast<unsigned>(std::atoi(k + 5));
     if (const char *k = std::strstr(buf, "near=")) { const float v = static_cast<float>(std::atof(k + 5)); if (v >= 0.05f && v <= 4.0f) PspGu::g_nearPlane = v; }
-    PspSystem::bootTrace("render.ini: skipempty=%d defer=%d skip=%u near=%.2f noindex=%d texsync=%d flush=%d noclip=%d\n", PspGu::g_skipEmpty, PspGu::g_dbgDefer, PspGu::g_dbgSkip, (double)PspGu::g_nearPlane, PspGu::g_dbgNoIndex, PspGu::g_dbgTexSync, PspGu::g_dbgFlushAll, PspGu::g_dbgNoClip);
+    PspSystem::bootTrace("render.ini: lateflip=%d skipempty=%d defer=%d skip=%u near=%.2f noindex=%d texsync=%d flush=%d noclip=%d\n", PspGu::g_lateFlip, PspGu::g_skipEmpty, PspGu::g_dbgDefer, PspGu::g_dbgSkip, (double)PspGu::g_nearPlane, PspGu::g_dbgNoIndex, PspGu::g_dbgTexSync, PspGu::g_dbgFlushAll, PspGu::g_dbgNoClip);
 }
 
 bool init()
@@ -482,7 +485,7 @@ void present()
                                  g_prof.display / 120, (unsigned)(geSum / 120),
                                  g_stats.lastDrawCalls, g_stats.lastVertices, g_prof.gui, g_prof.world / 120, g_prof.overlay / 120, g_prof.clear / 120, g_prof.screen / 120);
             { const struct mallinfo mi = mallinfo(); PspSystem::bootTrace("mem: heap used %u KB, arena %u KB, arenaDrops %u, audio blocks %u voices %d err %d\n", (unsigned)(mi.uordblks / 1024), (unsigned)(mi.arena / 1024), (unsigned)g_stats.arenaDrops, (unsigned)g_pspAudioBlocks, (int)g_pspAudioVoices, (int)g_pspAudioLastError); }
-            PspSystem::bootTrace("frames: empty %u (longest run %u), startFail %u, syncErr %u, dispMismatch %u, sameBuf %u\n", g_diag.empty, g_diag.maxEmptyRun, g_diag.startFail, g_diag.syncErr, g_diag.dispMismatch, g_diag.sameBuf);
+            PspSystem::bootTrace("frames: empty %u (longest run %u), startFail %u, syncErr %u, dispMismatch %u, sameBuf %u, lateFlips %u flipWaits %u\n", g_diag.empty, g_diag.maxEmptyRun, g_diag.startFail, g_diag.syncErr, g_diag.dispMismatch, g_diag.sameBuf, g_diag.lateFlips, g_diag.flipWaits);
             dumpCallers();
             PspProfile::dump();
             g_prof = Prof();
@@ -490,7 +493,12 @@ void present()
         profFrames = 0; geSum = 0; frameSum = 0;
     }
 
-    unsigned waits = g_pacer.waitsNeeded(sceDisplayGetVcount());
+    // On time: wait for the 30 fps slot as before. Late (most frames in the world): flip now and only
+    // wait for the vblank if the GE is about to draw into the old front buffer before it happened
+    // (waitFlip, called before the next frame's first draw). The game tick runs in between.
+    const unsigned vcNow = sceDisplayGetVcount();
+    const bool lateFlip = g_lateFlip && g_pacer.late(vcNow);
+    unsigned waits = lateFlip ? 0u : g_pacer.waitsNeeded(vcNow);
     while (waits--)
         sceDisplayWaitVblankStart();
     const int geState = syncList(); // the frame must be complete before it is flipped to the screen
@@ -504,6 +512,12 @@ void present()
         sceDisplayGetFrameBuf(&top, &bw, &fmt, PSP_DISPLAY_SETBUF_NEXTFRAME);
         const unsigned disp = reinterpret_cast<unsigned>(top) & 0x1FFFFFu;
         recordPresent(caller, false, disp, geState);
+        if (lateFlip)
+        {
+            ++g_diag.lateFlips;
+            g_flipPending = true;
+            g_flipVcount = sceDisplayGetVcount();
+        }
         if (disp == newDraw)
         {
             ++g_diag.sameBuf;
@@ -550,6 +564,20 @@ void *frameAlloc(std::size_t bytes)
     void *p = g_arena[g_arenaIndex] + g_arenaUsed;
     g_arenaUsed += aligned;
     return p;
+}
+
+void waitFlip()
+{
+    if (!g_flipPending)
+        return;
+    g_flipPending = false;
+    // The display switches buffers at the next vblank; until then the buffer the GE is about to clear
+    // is still on screen.
+    if (sceDisplayGetVcount() == g_flipVcount)
+    {
+        ++g_diag.flipWaits;
+        sceDisplayWaitVblankStart();
+    }
 }
 
 void flushArena()
