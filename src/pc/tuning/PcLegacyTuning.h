@@ -74,7 +74,8 @@
 #define PC_LEGACY_ENTITY_AI_FAR_TICK_DIVISOR 4
 #define PC_LEGACY_LIMIT_ENTITY_RENDER_DISTANCE 1
 #ifdef PSP_PLATFORM
-#define PC_LEGACY_ENTITY_RENDER_RADIUS_BLOCKS 48.0f
+// The PSP fog ends at ~32 blocks (2-chunk view): a mob further away is not visible at all.
+#define PC_LEGACY_ENTITY_RENDER_RADIUS_BLOCKS 36.0f
 #else
 #define PC_LEGACY_ENTITY_RENDER_RADIUS_BLOCKS 64.0f
 #endif
@@ -85,8 +86,14 @@
 #define PC_LEGACY_ENTITY_PUSH_COLLISION_RADIUS_BLOCKS 48.0f
 #endif
 
+#ifdef PSP_PLATFORM
+// PSP: at most 2 path searches per tick, 200 nodes each (mobs repath a little later, never stall a tick).
+#define PC_LEGACY_PATHFIND_BUDGET_PER_TICK 2
+#define PC_LEGACY_PATHFIND_MAX_NODES 200
+#else
 #define PC_LEGACY_PATHFIND_BUDGET_PER_TICK 3
 #define PC_LEGACY_PATHFIND_MAX_NODES 300
+#endif
 #define PC_LEGACY_PATH_SHORTCUT_TICK_DIVISOR 4
 
 #define PC_LEGACY_BATCH_POPULATION_LIGHTING 1
