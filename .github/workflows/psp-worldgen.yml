@@ -1,7 +1,7 @@
 name: PSP world generator (Windows)
 
 permissions:
-  contents: read
+  contents: write
 
 on:
   push:
@@ -65,3 +65,15 @@ jobs:
           name: OptiCraftPSPWorldGen
           path: dist/OptiCraftPSPWorldGen
           if-no-files-found: error
+
+      - name: Zip
+        run: Compress-Archive -Path dist/OptiCraftPSPWorldGen -DestinationPath OptiCraftPSPWorldGen.zip
+        shell: pwsh
+
+      - name: Publish as release "psp-worldgen"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view psp-worldgen >/dev/null 2>&1 || gh release create psp-worldgen --title "PSP world generator (Windows)" --notes "OptiCraftPSPWorldGen.zip: unzip, run GeneratePSPWorld.bat, copy out/<name> to PSP/SAVEDATA/OPTICRAFT/saves/. Built from ${{ github.sha }}." --target ${{ github.sha }} --prerelease
+          gh release upload psp-worldgen OptiCraftPSPWorldGen.zip --clobber
+        shell: bash
