@@ -78,8 +78,40 @@ void initializeGameData()
 }
 } // namespace
 
+// "--pregen-verify <saves> <name>": reads level.dat and the spawn chunks back through the normal
+// load path and reports what the PSP will see.
+static int runWorldVerify(const std::string &savesDir, const std::string &worldName)
+{
+	initializeGameData();
+	AnvilSaveConverter saveFormat(savesDir);
+	ISaveHandler *saveHandler = saveFormat.getSaveLoader(worldName, false);
+	WorldSettings settings(0, 0, true, false, WorldType::DEFAULT, 0);
+	World *world = new World(saveHandler, worldName, &settings);
+	WorldInfo *info = world->getWorldInfo();
+	std::printf("isNewWorld=%d sizeType=%d limited=%d chunks %d..%d boundary %.1f spawn %d %d %d\n",
+	            world->isNewWorld ? 1 : 0, info->getWorldSizeType(), info->isLimitedWorld() ? 1 : 0,
+	            info->getLimitedWorldMinChunk(), info->getLimitedWorldMaxChunk(), info->getLimitedWorldBoundary(),
+	            info->getSpawnX(), info->getSpawnY(), info->getSpawnZ());
+	const int cx = info->getSpawnX() >> 4, cz = info->getSpawnZ() >> 4;
+	for (int dz = -1; dz <= 1; ++dz)
+		for (int dx = -1; dx <= 1; ++dx)
+		{
+			Chunk *c = world->getChunkFromChunkCoords(cx + dx, cz + dz);
+			int solid = 0;
+			for (int x = 0; x < 16; ++x)
+				for (int z = 0; z < 16; ++z)
+					for (int y = 0; y < 128; ++y)
+						if (c->getBlockID(x, y, z) != 0) ++solid;
+			std::printf("chunk %d,%d populated=%d solid=%d\n", cx + dx, cz + dz, c->isTerrainPopulated ? 1 : 0, solid);
+		}
+	std::fflush(stdout);
+	std::_Exit(0);
+}
+
 int runWorldPregen(int argc, char **argv)
 {
+	if (argc >= 4 && std::strcmp(argv[1], "--pregen-verify") == 0)
+		return runWorldVerify(argv[2], argv[3]);
 	if (argc < 6)
 	{
 		usage();

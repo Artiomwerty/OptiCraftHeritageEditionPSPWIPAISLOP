@@ -44,14 +44,17 @@ WorldInfo::WorldInfo(NBTTagCompound *nbttagcompound)
 		worldSizeType = nbttagcompound->getInteger("worldSizeType");
 		limitedWorld = (worldSizeType != 0);
 	}
-	if (nbttagcompound->hasKey("LimitedChunkRadius"))
-		limitedChunkRadius = nbttagcompound->getInteger("LimitedChunkRadius");
-	if (worldSizeType == 3 && limitedChunkRadius <= 0)
-		worldSizeType = 2; // malformed custom size: fall back to 864x864
 	else
 	{
 		limitedWorld = nbttagcompound->hasKey("limitedWorld") ? nbttagcompound->getBoolean("limitedWorld") : false;
 		worldSizeType = limitedWorld ? 1 : 0;
+	}
+	if (nbttagcompound->hasKey("LimitedChunkRadius"))
+		limitedChunkRadius = nbttagcompound->getInteger("LimitedChunkRadius");
+	if (worldSizeType == 3 && limitedChunkRadius <= 0)
+	{
+		worldSizeType = 2; // malformed custom size: fall back to 864x864
+		limitedWorld = true;
 	}
 	playerTag = nullptr;
 	player2Tag = nullptr;
