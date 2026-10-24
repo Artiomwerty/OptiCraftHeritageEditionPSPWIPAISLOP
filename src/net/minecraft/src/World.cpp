@@ -205,10 +205,32 @@ static bool isActiveClientEntity(Entity *entity)
             static_cast<void *>(mc->renderViewEntity) == static_cast<void *>(entity));
 }
 
+// A dead player (respawn) is still referenced by mob AI that Java's garbage collector would keep
+// alive: EntityAIWatchClosest, attack/revenge targets, tempt/beg tasks... Only EntityCreature targets
+// are cleared in onEntityRemoved(), so deleting the old player here made the next AI tick read freed
+// memory (the crash right after pressing Respawn). Retired players are freed with their world, when no
+// mob of that world is left to point at them.
+static std::vector<Entity *> s_retiredPlayers;
+
 static void deleteWorldOwnedEntity(Entity *entity)
 {
-    if (!isActiveClientEntity(entity))
-        delete entity;
+    if (isActiveClientEntity(entity))
+        return;
+    if (dynamic_cast<EntityPlayer *>(entity) != nullptr)
+    {
+        if (std::find(s_retiredPlayers.begin(), s_retiredPlayers.end(), entity) == s_retiredPlayers.end())
+            s_retiredPlayers.push_back(entity);
+        return;
+    }
+    delete entity;
+}
+
+static void freeRetiredPlayers()
+{
+    for (Entity *entity : s_retiredPlayers)
+        if (!isActiveClientEntity(entity))
+            delete entity;
+    s_retiredPlayers.clear();
 }
 
 static void pushUniqueTileEntity(std::vector<TileEntity *> &list, TileEntity *tileEntity)
@@ -288,6 +310,7 @@ World::~World()
 
     for (Entity *entity : entities)
         deleteWorldOwnedEntity(entity);
+    freeRetiredPlayers();
     for (TileEntity *tileEntity : tileEntities)
         delete tileEntity;
     // lightingToUpdate now holds MetadataChunkBlock by value; nothing to free.
@@ -5154,12 +5177,10 @@ void World::func_48458_a(int_t chunkOriginX, int_t chunkOriginZ, Chunk *chunk)
         }
     }
 
-#if PLATFORM_PSP
-    // Later-version relight sweep (not in 1.2.5). The full rate (8 column steps per visit, each with
-    // six neighbour reads and up to three lighting updates per block) cost 6-19 ms per tick on the
-    // PSP for minutes after every chunk load; one step per visit keeps it at about an eighth.
-    chunk->enqueueRelightChecks(1);
-#else
+#if !PLATFORM_PSP
+    // Later-version relight sweep (not in 1.2.5). Off on the PSP: even at 1/8 rate (test105-108) its
+    // light updates kept marking chunk meshes dirty, so terrain was rebuilt every frame, and that is
+    // when the screen started showing old pictures again. test104 had it off and was fine.
     chunk->enqueueRelightChecks();
 #endif
 }
