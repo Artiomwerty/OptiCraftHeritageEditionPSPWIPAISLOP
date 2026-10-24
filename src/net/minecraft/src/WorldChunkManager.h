@@ -59,7 +59,7 @@ public:
     bool isLimitedWorld() const { return limitedWorld; }
     void setLimitedWorld(bool limited) { limitedWorld = limited; if (limited && worldSizeType == 0) worldSizeType = 1; else if (!limited) worldSizeType = 0; }
     int_t getWorldSizeType() const { return worldSizeType; }
-    void setWorldSizeType(int_t type) { worldSizeType = type; limitedWorld = (type != 0); }
+    void setWorldSizeType(int_t type) { worldSizeType = type; limitedWorld = (type != 0 && type != 3); }
 
     BiomeNoiseBuffer temperature;
     BiomeNoiseBuffer humidity;
