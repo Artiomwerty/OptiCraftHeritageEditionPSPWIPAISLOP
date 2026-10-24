@@ -34,7 +34,8 @@ PspGu::Prof g_prof;
 PspGu::Stats g_stats;
 std::size_t g_vramNext = 0;
 // Presentation diagnostics (boot.log "frames:" line).
-struct FrameDiag { unsigned empty = 0, emptyRun = 0, maxEmptyRun = 0, startFail = 0, syncErr = 0, dispMismatch = 0, sameBuf = 0, flipWaits = 0, lateFlips = 0; };
+struct FrameDiag { unsigned empty = 0, emptyRun = 0, maxEmptyRun = 0, startFail = 0, syncErr = 0, dispMismatch = 0, sameBuf = 0, flipWaits = 0, lateFlips = 0, geMissed = 0; };
+unsigned g_sentinelCounter = 1;
 FrameDiag g_diag;
 bool g_flipPending = false;
 unsigned g_flipVcount = 0;
@@ -279,7 +280,7 @@ static void loadRenderIni()
     PspGu::g_dbgNoClip = std::strstr(buf, "noclip=1") != nullptr;
     PspGu::g_dbgDefer = std::strstr(buf, "defer=1") != nullptr;
     PspGu::g_skipEmpty = std::strstr(buf, "skipempty=0") == nullptr;
-    PspGu::g_lateFlip = std::strstr(buf, "lateflip=0") == nullptr;
+    PspGu::g_lateFlip = std::strstr(buf, "lateflip=1") != nullptr;
     if (const char *k = std::strstr(buf, "skip=")) PspGu::g_dbgSkip = static_cast<unsigned>(std::atoi(k + 5));
     if (const char *k = std::strstr(buf, "near=")) { const float v = static_cast<float>(std::atof(k + 5)); if (v >= 0.05f && v <= 4.0f) PspGu::g_nearPlane = v; }
     PspSystem::bootTrace("render.ini: lateflip=%d skipempty=%d defer=%d skip=%u near=%.2f noindex=%d texsync=%d flush=%d noclip=%d\n", PspGu::g_lateFlip, PspGu::g_skipEmpty, PspGu::g_dbgDefer, PspGu::g_dbgSkip, (double)PspGu::g_nearPlane, PspGu::g_dbgNoIndex, PspGu::g_dbgTexSync, PspGu::g_dbgFlushAll, PspGu::g_dbgNoClip);
@@ -472,6 +473,25 @@ void present()
     static unsigned profFrames = 0, profLines = 0;
     const std::uint64_t t0 = PspSystem::micros();
     if (lastReturn) workSum += t0 - lastReturn;
+    // Sentinel: one pixel in the bottom-right corner carrying the frame number. Read back after the GE
+    // is done: if it is not there, the GE did not draw this frame into the buffer about to be shown.
+    const unsigned sentinel = 0xFF000000u | ((g_sentinelCounter++ * 2654435761u) & 0x00FFFFFFu);
+    {
+        struct V { unsigned color; short x, y, z; };
+        V *v = static_cast<V *>(sceGuGetMemory(2 * sizeof(V)));
+        v[0] = {sentinel, short(kScreenWidth - 1), short(kScreenHeight - 1), 0};
+        v[1] = {sentinel, short(kScreenWidth), short(kScreenHeight), 0};
+        sceGuDisable(GU_TEXTURE_2D);
+        sceGuDisable(GU_BLEND);
+        sceGuDisable(GU_DEPTH_TEST);
+        sceGuDisable(GU_ALPHA_TEST);
+        sceGuDisable(GU_FOG);
+        sceGuDisable(GU_LIGHTING);
+        sceGuPixelMask(0);
+        sceGuScissor(0, 0, kScreenWidth, kScreenHeight);
+        sceGuDrawArray(GU_SPRITES, GU_COLOR_8888 | GU_VERTEX_16BIT | GU_TRANSFORM_2D, 2, nullptr, v);
+        pspRenderInvalidateState();
+    }
     sceGuFinish(); // submit: the GE starts drawing now, in parallel with the pacing wait below
     const std::uint64_t t1 = PspSystem::micros();
     if (lastEnd) frameSum += t1 - lastEnd;
@@ -485,7 +505,7 @@ void present()
                                  g_prof.display / 120, (unsigned)(geSum / 120),
                                  g_stats.lastDrawCalls, g_stats.lastVertices, g_prof.gui, g_prof.world / 120, g_prof.overlay / 120, g_prof.clear / 120, g_prof.screen / 120);
             { const struct mallinfo mi = mallinfo(); PspSystem::bootTrace("mem: heap used %u KB, arena %u KB, arenaDrops %u, audio blocks %u voices %d err %d\n", (unsigned)(mi.uordblks / 1024), (unsigned)(mi.arena / 1024), (unsigned)g_stats.arenaDrops, (unsigned)g_pspAudioBlocks, (int)g_pspAudioVoices, (int)g_pspAudioLastError); }
-            PspSystem::bootTrace("frames: empty %u (longest run %u), startFail %u, syncErr %u, dispMismatch %u, sameBuf %u, lateFlips %u flipWaits %u\n", g_diag.empty, g_diag.maxEmptyRun, g_diag.startFail, g_diag.syncErr, g_diag.dispMismatch, g_diag.sameBuf, g_diag.lateFlips, g_diag.flipWaits);
+            PspSystem::bootTrace("frames: empty %u (longest run %u), startFail %u, syncErr %u, dispMismatch %u, sameBuf %u, lateFlips %u flipWaits %u, geMissed %u\n", g_diag.empty, g_diag.maxEmptyRun, g_diag.startFail, g_diag.syncErr, g_diag.dispMismatch, g_diag.sameBuf, g_diag.lateFlips, g_diag.flipWaits, g_diag.geMissed);
             dumpCallers();
             PspProfile::dump();
             g_prof = Prof();
@@ -512,6 +532,17 @@ void present()
         sceDisplayGetFrameBuf(&top, &bw, &fmt, PSP_DISPLAY_SETBUF_NEXTFRAME);
         const unsigned disp = reinterpret_cast<unsigned>(top) & 0x1FFFFFu;
         recordPresent(caller, false, disp, geState);
+        {
+            const unsigned got = *reinterpret_cast<volatile unsigned *>(0x44000000u + disp +
+                                     ((kScreenHeight - 1) * kBufferWidth + (kScreenWidth - 1)) * 4u);
+            if (got != sentinel)
+            {
+                ++g_diag.geMissed;
+                if (g_diag.geMissed <= 8)
+                    PspSystem::bootTrace("present: GE did not draw frame into %06x (pixel %08x, want %08x, draws %u, ge %d)\n",
+                                         disp, got, sentinel, g_stats.drawCalls, geState);
+            }
+        }
         if (lateFlip)
         {
             ++g_diag.lateFlips;

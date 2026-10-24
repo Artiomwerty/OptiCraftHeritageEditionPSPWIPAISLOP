@@ -20,7 +20,7 @@ inline unsigned g_dbgSkip = 0;
 inline bool g_dbgDefer = false; // render.ini defer=1: free vertex/texture memory only after the frame (test96; caused flicker)
 inline float g_nearPlane = 0.3f;
 inline void *g_presentCaller = nullptr; // set by lwjgl::Display before present(), for boot.log diagnostics
-inline bool g_lateFlip = true; // render.ini lateflip=0: always wait for the vblank before flipping
+inline bool g_lateFlip = false; // render.ini lateflip=1: flip late frames without waiting for the vblank (test103-107)
 inline bool g_skipEmpty = true; // render.ini skipempty=0: flip even frames that drew nothing (test99 behaviour)
 inline bool g_dbgNoIndex = true, g_dbgTexSync = true, g_dbgFlushAll = false, g_dbgNoClip = false;
 constexpr int kScreenWidth = 480;
