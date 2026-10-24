@@ -19,7 +19,12 @@
 #define PC_LEGACY_CHUNK_CACHE_RADIUS 5
 #define PC_LEGACY_CHUNK_UNLOAD_RADIUS 6
 #endif
+#ifdef PSP_PLATFORM
+// 7x7 chunks: the PC-generated (vanilla) chunks take ~0.12 s each to load and more RAM than PSP-made ones.
+#define PC_LEGACY_PRELOAD_RADIUS_BLOCKS 48
+#else
 #define PC_LEGACY_PRELOAD_RADIUS_BLOCKS 80
+#endif
 
 #define PC_LEGACY_ASYNC_GENERATION_QUEUE_LIMIT 6
 #define PC_LEGACY_ASYNC_GENERATION_REQUESTS_PER_TICK 1
