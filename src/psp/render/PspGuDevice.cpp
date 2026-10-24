@@ -4,6 +4,7 @@
 #include <pspctrl.h>
 #include <pspdisplay.h>
 #include <pspiofilemgr.h>
+#include <pspge.h>
 #include <pspgu.h>
 #include <pspkernel.h>
 #include <psputils.h>
@@ -38,21 +39,56 @@ FrameDiag g_diag;
 struct CallerDiag { void *ra = nullptr; unsigned frames = 0, empty = 0; };
 CallerDiag g_callers[8];
 
-void noteCaller(bool empty)
+int noteCaller(bool empty)
 {
     void *ra = PspGu::g_presentCaller;
     PspGu::g_presentCaller = nullptr;
-    for (CallerDiag &c : g_callers)
+    for (int i = 0; i < 8; ++i)
     {
+        CallerDiag &c = g_callers[i];
         if (c.ra == ra || c.ra == nullptr)
         {
             c.ra = ra;
             ++c.frames;
             if (empty) ++c.empty;
-            return;
+            return i;
+        }
+    }
+    return -1;
+}
+
+// The last 16 presents, written to boot.log on a screenshot (L+R+SELECT) or a HANG, so the moment an
+// old picture shows up can be inspected.
+struct PresentRec { unsigned t; signed char caller; unsigned char empty; unsigned short draws; unsigned verts; unsigned fb; int geState; };
+PresentRec g_presents[16];
+unsigned g_presentPos = 0;
+
+int callerIndex(void *ra)
+{
+    for (int i = 0; i < 8; ++i)
+        if (g_callers[i].ra == ra) return i;
+    return -1;
+}
+
+void dumpPresents(const char *why)
+{
+    PspSystem::bootTrace("last presents (%s), newest first: [ms caller empty draws verts fb ge]\n", why);
+    char line[260];
+    int n = 0;
+    for (unsigned k = 0; k < 16 && k < g_presentPos; ++k)
+    {
+        const PresentRec &p = g_presents[(g_presentPos - 1 - k) & 15];
+        n += std::snprintf(line + n, sizeof(line) - n, " [%u c%d %s d%u v%u %06x g%d]", p.t, (int)p.caller,
+                           p.empty ? "E" : "-", (unsigned)p.draws, p.verts, p.fb, p.geState);
+        if (n > 200 || k == 15 || k + 1 >= g_presentPos)
+        {
+            PspSystem::bootTrace("%s\n", line);
+            n = 0;
         }
     }
 }
+
+void hangHook() { dumpPresents("hang"); }
 
 void dumpCallers()
 {
@@ -251,6 +287,7 @@ bool init()
     if (g_init)
         return true;
     loadRenderIni();
+    PspSystem::g_hangHook = hangHook;
     for (int i = 0; i < 2; ++i)
     {
         g_arena[i] = static_cast<unsigned char *>(memalign(64, kArenaBytes));
@@ -313,6 +350,7 @@ static void maybeScreenshot()
     prevCombo = now;
     if (!fire || shots >= 8)
         return;
+    dumpPresents("screenshot");
     void *top = nullptr; int bw = 0, fmt = 0;
     sceDisplayGetFrameBuf(&top, &bw, &fmt, PSP_DISPLAY_SETBUF_NEXTFRAME);
     if (!top || bw <= 0 || fmt != PSP_DISPLAY_PIXEL_FORMAT_8888)
@@ -367,7 +405,10 @@ static void startList()
     }
 }
 
-static void syncList()
+extern "C" int ge_list_executed[]; // libpspgu: id of the list sceGuStart queued
+
+// Waits for the GE; returns the list's state afterwards (0 = done).
+static int syncList()
 {
     const int rc = sceGuSync(0, 0);
     if (rc < 0)
@@ -376,6 +417,19 @@ static void syncList()
         if (g_diag.syncErr <= 5)
             PspSystem::bootTrace("present: sceGuSync error 0x%08x\n", (unsigned)rc);
     }
+    return sceGeListSync(ge_list_executed[0], 1);
+}
+
+static void recordPresent(int caller, bool empty, unsigned fb, int geState)
+{
+    PresentRec &p = g_presents[g_presentPos++ & 15];
+    p.t = PspSystem::millis();
+    p.caller = static_cast<signed char>(caller);
+    p.empty = empty ? 1 : 0;
+    p.draws = static_cast<unsigned short>(g_stats.drawCalls > 65535 ? 65535 : g_stats.drawCalls);
+    p.verts = g_stats.vertices;
+    p.fb = fb;
+    p.geState = geState;
 }
 
 void present()
@@ -386,12 +440,13 @@ void present()
     // A frame that drew and cleared nothing would flip a back buffer still holding a picture from two
     // frames ago (the world list flashing over the loading screen). Run the list, but keep showing the
     // current front buffer.
-    noteCaller(g_stats.drawCalls == 0);
+    const int caller = noteCaller(g_stats.drawCalls == 0);
     if (g_stats.drawCalls == 0 && g_skipEmpty)
     {
         flushArena();
         sceGuFinish();
-        syncList();
+        const int ge = syncList();
+        recordPresent(caller, true, 0xFFFFFF, ge);
         releaseDeferred();
         g_arenaIndex ^= 1;
         g_arenaUsed = 0;
@@ -438,7 +493,7 @@ void present()
     unsigned waits = g_pacer.waitsNeeded(sceDisplayGetVcount());
     while (waits--)
         sceDisplayWaitVblankStart();
-    syncList(); // the frame must be complete before it is flipped to the screen
+    const int geState = syncList(); // the frame must be complete before it is flipped to the screen
     releaseDeferred();
     geSum += PspSystem::micros() - t1;
     g_pacer.presented(sceDisplayGetVcount());
@@ -448,6 +503,7 @@ void present()
         void *top = nullptr; int bw = 0, fmt = 0;
         sceDisplayGetFrameBuf(&top, &bw, &fmt, PSP_DISPLAY_SETBUF_NEXTFRAME);
         const unsigned disp = reinterpret_cast<unsigned>(top) & 0x1FFFFFu;
+        recordPresent(caller, false, disp, geState);
         if (disp == newDraw)
         {
             ++g_diag.sameBuf;

@@ -1223,6 +1223,9 @@ void renderClear(unsigned int mask)
     if (mask & RenderClearMask::Color) flags |= GU_COLOR_BUFFER_BIT;
     if (mask & RenderClearMask::Depth) flags |= GU_DEPTH_BUFFER_BIT;
     if (!flags) return;
+    // The clear is scissored like any draw: apply a viewport set since the last draw first, or the
+    // clear covers only the previous region (and old depth then rejects parts of the new frame).
+    applyViewport();
     sceGuClearColor(packColor(g_s.clearColor[0], g_s.clearColor[1], g_s.clearColor[2], g_s.clearColor[3]));
     sceGuClearDepth(static_cast<unsigned>((1.0f - g_s.clearDepth) * 65535.0f));
     sceGuClear(flags | (flags == (GU_COLOR_BUFFER_BIT | GU_DEPTH_BUFFER_BIT) ? GU_FAST_CLEAR_BIT : 0));

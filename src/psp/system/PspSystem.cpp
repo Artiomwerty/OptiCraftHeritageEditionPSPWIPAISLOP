@@ -103,6 +103,8 @@ void crumb(const char *tag, int a, int b)
 
 void heartbeat() { ++g_beat; }
 
+void (*g_hangHook)() = nullptr;
+
 static int dumpRing(char *out, int cap)
 {
     int n = 0;
@@ -131,15 +133,16 @@ static int watchdogMain(SceSize, void *)
         if (stalled >= 5 && (stalled - 5) % 10 == 0 && reports < 4)
         {
             ++reports;
-            const struct mallinfo mi = mallinfo();
+            // No mallinfo() here: if the game froze inside malloc, the heap lock is held and the
+            // watchdog would block on it too (test101 froze without a HANG line).
             char text[700];
-            int n = snprintf(text, sizeof(text), "%8u ms  HANG: no frame for %d s, heap used %u KB, arena %u KB, last:",
-                (unsigned)millis(), stalled, (unsigned)(mi.uordblks / 1024), (unsigned)(mi.arena / 1024));
+            int n = snprintf(text, sizeof(text), "%8u ms  HANG: no frame for %d s, last:", (unsigned)millis(), stalled);
             n += dumpRing(text + n, (int)sizeof(text) - n - 2);
             text[n++] = '\n';
             char path[300];
             snprintf(path, sizeof(path), "%s/boot.log", g_appDir.empty() ? "ms0:/PSP/GAME/OptiCraft" : g_appDir.c_str());
             rawWrite(path, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_APPEND, text, n);
+            if (g_hangHook) g_hangHook();
         }
     }
     return 0;
@@ -147,7 +150,9 @@ static int watchdogMain(SceSize, void *)
 
 void startWatchdog()
 {
-    const int th = sceKernelCreateThread("watchdog", watchdogMain, 0x70, 0x1000, PSP_THREAD_ATTR_USER, nullptr);
+    // Higher priority than the game (0x20): it sleeps 1 s at a time, so it costs nothing, but a game
+    // thread stuck in a busy loop can no longer starve it.
+    const int th = sceKernelCreateThread("watchdog", watchdogMain, 0x12, 0x4000, PSP_THREAD_ATTR_USER, nullptr);
     if (th >= 0) sceKernelStartThread(th, 0, nullptr);
 }
 

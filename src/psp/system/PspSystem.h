@@ -26,6 +26,8 @@ void crumb(const char *tag, int a, int b);
 // Called once per presented frame; the watchdog thread logs a HANG line if it stops advancing.
 void heartbeat();
 void startWatchdog();
+// Optional extra report the watchdog runs when it logs a HANG (set by the renderer).
+extern void (*g_hangHook)();
 
 // Leaves to the XMB. Safe to call from any thread.
 void exitGame();
