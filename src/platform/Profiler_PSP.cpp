@@ -53,8 +53,14 @@ void dump()
 }
 
 std::uint32_t platformProfileRenderPhaseBegin() { return 0; }
-void platformProfileRenderPhaseEnd(std::uint32_t, PlatformRenderPhase) {}
-void platformProfileTickPhase(const char *name, long long ns) { note(name, ns); }
+void platformProfileRenderPhaseEnd(std::uint32_t, PlatformRenderPhase phase)
+{
+    static const char *const kNames[] = {"r:sky", "r:frustum", "r:build", "r:opaque", "r:entities", "r:translucent",
+                                         "r:hand", "r:hud", "r:entDraw", "r:tileEntDraw", "r:hudItems", "r:hudText", "r:hudHints"};
+    const unsigned idx = static_cast<unsigned>(phase);
+    PspSystem::tracePoint(idx < sizeof(kNames) / sizeof(kNames[0]) ? kNames[idx] : "r:?", static_cast<int>(idx));
+}
+void platformProfileTickPhase(const char *name, long long ns) { note(name, ns); PspSystem::tracePoint(name); }
 void platformProfileChunkBuild(long long, int) {}
 void platformProfileChunkMeshPass(int, long long, int) {}
 void platformProfileSnowColumn(bool, bool, int) {}

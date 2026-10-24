@@ -1795,6 +1795,9 @@ void Minecraft::startCheckHasPaidThread()
 
 void Minecraft::runTick()
 {
+#ifdef PSP_PLATFORM
+    PspSystem::tracePoint("runTick");
+#endif
     if (rightClickDelayTimer > 0)
         --rightClickDelayTimer;
 
@@ -2750,6 +2753,11 @@ void Minecraft::changeWorld(World *world, const std::string &s, EntityPlayerSP *
 
     if (renderGlobal != nullptr)
         renderGlobal->changeWorld(world);
+#ifdef PSP_PLATFORM
+    // Crash locator: record the steps of the first 25 s in every loaded world (trace.log).
+    if (world != nullptr)
+        PspSystem::traceArm(25000);
+#endif
     platformMemoryCheckpoint("changeWorld renderGlobal ready");
     if (effectRenderer != nullptr)
         effectRenderer->clearEffects(world);

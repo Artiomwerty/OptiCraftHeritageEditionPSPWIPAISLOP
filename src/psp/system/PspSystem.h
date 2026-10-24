@@ -25,6 +25,10 @@ void installCrashHandler();
 void crumb(const char *tag, int a, int b);
 // Called once per presented frame; the watchdog thread logs a HANG line if it stops advancing.
 void heartbeat();
+// Crash locator: for `ms` after traceArm(), every tracePoint() rewrites <appDir>/trace.log with the last
+// 16 points reached (the file survives a crash that kills the game). Off otherwise (one flag check).
+void traceArm(unsigned ms);
+void tracePoint(const char *tag, int a = 0, int b = 0);
 void startWatchdog();
 // Optional extra report the watchdog runs when it logs a HANG (set by the renderer).
 extern void (*g_hangHook)();

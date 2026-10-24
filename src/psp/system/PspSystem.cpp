@@ -103,6 +103,41 @@ void crumb(const char *tag, int a, int b)
 
 void heartbeat() { ++g_beat; }
 
+static int dumpRing(char *out, int cap);
+namespace { volatile bool g_traceArmed = false; unsigned g_traceUntil = 0; unsigned g_traceSession = 0; }
+
+void traceArm(unsigned ms)
+{
+    g_traceUntil = millis() + ms;
+    ++g_traceSession;
+    g_traceArmed = true;
+}
+
+void tracePoint(const char *tag, int a, int b)
+{
+    if (!g_traceArmed)
+        return;
+    crumb(tag, a, b);
+    // Per-entity points ("e:mob", "r:entDraw", ...) only go into the ring; the next phase point writes it.
+    if (tag[0] == 'e' && tag[1] == ':')
+        return;
+    if (tag[0] == 'r' && tag[1] == ':' && (tag[2] == 'e' || tag[2] == 't'))
+        return;
+    const unsigned now = millis();
+    if ((int)(now - g_traceUntil) > 0)
+    {
+        g_traceArmed = false;
+        return;
+    }
+    char text[900];
+    int n = snprintf(text, sizeof(text), "%8u ms  world load #%u, newest first:", now, g_traceSession);
+    n += dumpRing(text + n, (int)sizeof(text) - n - 2);
+    text[n++] = '\n';
+    char path[300];
+    snprintf(path, sizeof(path), "%s/trace.log", g_appDir.empty() ? "ms0:/PSP/GAME/OptiCraft" : g_appDir.c_str());
+    rawWrite(path, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC, text, n);
+}
+
 void (*g_hangHook)() = nullptr;
 
 static int dumpRing(char *out, int cap)

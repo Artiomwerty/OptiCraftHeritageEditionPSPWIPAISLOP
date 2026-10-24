@@ -439,6 +439,7 @@ void present()
 {
     if (!g_init)
         return;
+    PspSystem::tracePoint("present", static_cast<int>(g_stats.drawCalls));
 
     // A frame that drew and cleared nothing would flip a back buffer still holding a picture from two
     // frames ago (the world list flashing over the loading screen). Run the list, but keep showing the
