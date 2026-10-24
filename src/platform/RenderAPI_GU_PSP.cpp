@@ -131,7 +131,9 @@ struct Applied
     int tex2d = -1, blend = -1, alphaTest = -1, depthTest = -1, cull = -1, fog = -1, lighting = -1,
         light0 = -1, light1 = -1;
     int depthMask = -1;
-    unsigned blendKey = ~0u, alphaKey = ~0u, depthFuncKey = ~0u, pixelMask = ~0u, cullFaceKey = ~0u;
+    // pixelMask starts at a value no colour mask can produce (masks are whole bytes): ~0u is "all masked",
+    // which then was never re-sent after a reset.
+    unsigned blendKey = ~0u, alphaKey = ~0u, depthFuncKey = ~0u, pixelMask = 0x5Au, cullFaceKey = ~0u;
     unsigned fogKey = ~0u, polyKey = ~0u;
     std::uint32_t fogColor = 0;
     float fogNear = -1.0f, fogFar = -1.0f;
@@ -1228,6 +1230,17 @@ void renderClear(unsigned int mask)
     // clear covers only the previous region (and old depth then rejects parts of the new frame).
     applyViewport();
     PspGu::waitFlip();
+    // GL clears ignore the viewport (the game never turns the scissor test on) and honour the colour
+    // mask; the GE clears through whatever scissor and pixel mask the last draw left. Set both here.
+    sceGuScissor(0, 0, PspGu::kScreenWidth, PspGu::kScreenHeight);
+    {
+        unsigned mask = 0;
+        if (!g_s.colorMask[0]) mask |= 0x000000FFu;
+        if (!g_s.colorMask[1]) mask |= 0x0000FF00u;
+        if (!g_s.colorMask[2]) mask |= 0x00FF0000u;
+        if (!g_s.colorMask[3]) mask |= 0xFF000000u;
+        sceGuPixelMask(mask);
+    }
     sceGuClearColor(packColor(g_s.clearColor[0], g_s.clearColor[1], g_s.clearColor[2], g_s.clearColor[3]));
     sceGuClearDepth(static_cast<unsigned>((1.0f - g_s.clearDepth) * 65535.0f));
     sceGuClear(flags | (flags == (GU_COLOR_BUFFER_BIT | GU_DEPTH_BUFFER_BIT) ? GU_FAST_CLEAR_BIT : 0));

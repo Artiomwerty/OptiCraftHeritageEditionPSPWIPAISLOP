@@ -340,6 +340,11 @@ bool isInitialized() { return g_init; }
 
 // Screenshot: hold L + R + SELECT. Saves the frame just shown as shotNN.bmp next to the EBOOT (max 8 per
 // run) so rendering glitches can be inspected exactly. Costs nothing unless the combo is held.
+// GE registers that decide whether a frame's pixels land at all (boot.log "GE state" lines).
+struct GeRegs { unsigned fbp, fbw, sc1, sc2, pmskc, pmska, zte, ztst, zmsk, abe, ate, region1, region2, clear; };
+static GeRegs readGeRegs();
+static void traceGeRegs(const char *why, const GeRegs &r);
+
 static void maybeScreenshot()
 {
     static bool prevCombo = false;
@@ -354,6 +359,7 @@ static void maybeScreenshot()
     if (!fire || shots >= 8)
         return;
     dumpPresents("screenshot");
+    traceGeRegs("screenshot", readGeRegs());
     void *top = nullptr; int bw = 0, fmt = 0;
     sceDisplayGetFrameBuf(&top, &bw, &fmt, PSP_DISPLAY_SETBUF_NEXTFRAME);
     if (!top || bw <= 0 || fmt != PSP_DISPLAY_PIXEL_FORMAT_8888)
@@ -397,6 +403,55 @@ static void maybeScreenshot()
     free(bmp);
 }
 
+static GeRegs readGeRegs()
+{
+    GeRegs r;
+    r.fbp = sceGeGetCmd(0x9C) & 0xFFFFFF; r.fbw = sceGeGetCmd(0x9D) & 0xFFFFFF;
+    r.sc1 = sceGeGetCmd(0xD4) & 0xFFFFFF; r.sc2 = sceGeGetCmd(0xD5) & 0xFFFFFF;
+    r.pmskc = sceGeGetCmd(0xE8) & 0xFFFFFF; r.pmska = sceGeGetCmd(0xE9) & 0xFFFFFF;
+    r.zte = sceGeGetCmd(0x23) & 0xFFFFFF; r.ztst = sceGeGetCmd(0xDE) & 0xFFFFFF; r.zmsk = sceGeGetCmd(0xE7) & 0xFFFFFF;
+    r.abe = sceGeGetCmd(0x21) & 0xFFFFFF; r.ate = sceGeGetCmd(0x22) & 0xFFFFFF;
+    r.region1 = sceGeGetCmd(0x15) & 0xFFFFFF; r.region2 = sceGeGetCmd(0x16) & 0xFFFFFF;
+    r.clear = sceGeGetCmd(0xD3) & 0xFFFFFF;
+    return r;
+}
+static void traceGeRegs(const char *why, const GeRegs &r)
+{
+    PspSystem::bootTrace("GE state (%s): fbp %06x fbw %06x scissor %06x-%06x pmsk %06x/%06x zte %u ztst %u zmsk %u abe %u ate %u region %06x-%06x clear %06x\n",
+                         why, r.fbp, r.fbw, r.sc1, r.sc2, r.pmskc, r.pmska, r.zte, r.ztst, r.zmsk, r.abe, r.ate, r.region1, r.region2, r.clear);
+}
+
+// End of every drawn frame (GE idle): a colour mask, scissor or clear mode left in a state that blocks
+// all drawing would freeze the picture on screen. Logged the first few times it is seen.
+static unsigned g_badStateLogs = 0;
+static void checkGeRegs()
+{
+    const GeRegs r = readGeRegs();
+    const unsigned x1 = r.sc1 & 0x3FF, y1 = (r.sc1 >> 10) & 0x3FF, x2 = r.sc2 & 0x3FF, y2 = (r.sc2 >> 10) & 0x3FF;
+    const bool masked = (r.pmskc & 0xFFFFFF) == 0xFFFFFF;
+    const bool smallScissor = x2 < x1 + 400 || y2 < y1 + 200;
+    const bool clearMode = (r.clear & 1) != 0;
+    if ((masked || smallScissor || clearMode) && g_badStateLogs < 12)
+    {
+        ++g_badStateLogs;
+        traceGeRegs(masked ? "colour writes masked at end of frame" : smallScissor ? "small scissor at end of frame" : "still in clear mode", r);
+    }
+}
+
+// Start of every frame: put back everything that decides where and whether pixels are written, and make
+// the renderer re-send all of its state on its first draw. Whatever left the GE in a bad state, it can
+// now spoil one frame at most instead of freezing the picture for seconds.
+static void resetFrameState()
+{
+    sceGuOffset(2048 - (PspGu::kScreenWidth / 2), 2048 - (PspGu::kScreenHeight / 2));
+    sceGuViewport(2048, 2048, PspGu::kScreenWidth, PspGu::kScreenHeight);
+    sceGuDepthRange(65535, 0);
+    sceGuScissor(0, 0, PspGu::kScreenWidth, PspGu::kScreenHeight);
+    sceGuEnable(GU_SCISSOR_TEST);
+    sceGuPixelMask(0);
+    pspRenderInvalidateState();
+}
+
 static void startList()
 {
     int rc = sceGuStart(GU_DIRECT, g_list);
@@ -406,6 +461,7 @@ static void startList()
         if (g_diag.startFail <= 5)
             PspSystem::bootTrace("present: sceGuStart failed 0x%08x\n", (unsigned)rc);
     }
+    resetFrameState();
 }
 
 extern "C" int ge_list_executed[]; // libpspgu: id of the list sceGuStart queued
@@ -502,6 +558,7 @@ void present()
     while (waits--)
         sceDisplayWaitVblankStart();
     const int geState = syncList(); // the frame must be complete before it is flipped to the screen
+    checkGeRegs();
     releaseDeferred();
     geSum += PspSystem::micros() - t1;
     g_pacer.presented(sceDisplayGetVcount());
