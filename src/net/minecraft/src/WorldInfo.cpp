@@ -44,6 +44,10 @@ WorldInfo::WorldInfo(NBTTagCompound *nbttagcompound)
 		worldSizeType = nbttagcompound->getInteger("worldSizeType");
 		limitedWorld = (worldSizeType != 0);
 	}
+	if (nbttagcompound->hasKey("LimitedChunkRadius"))
+		limitedChunkRadius = nbttagcompound->getInteger("LimitedChunkRadius");
+	if (worldSizeType == 3 && limitedChunkRadius <= 0)
+		worldSizeType = 2; // malformed custom size: fall back to 864x864
 	else
 	{
 		limitedWorld = nbttagcompound->hasKey("limitedWorld") ? nbttagcompound->getBoolean("limitedWorld") : false;
@@ -128,6 +132,7 @@ WorldInfo::WorldInfo(WorldInfo *worldinfo)
 	hardcore = worldinfo->hardcore;
 	limitedWorld = worldinfo->limitedWorld;
 	worldSizeType = worldinfo->worldSizeType;
+	limitedChunkRadius = worldinfo->limitedChunkRadius;
 	spawnX = worldinfo->spawnX;
 	spawnY = worldinfo->spawnY;
 	spawnZ = worldinfo->spawnZ;
@@ -225,6 +230,8 @@ void WorldInfo::updateTagCompound(NBTTagCompound *nbttagcompound, NBTTagCompound
 	nbttagcompound->setBoolean("hardcore", hardcore);
 	nbttagcompound->setBoolean("limitedWorld", worldSizeType != 0);
 	nbttagcompound->setInteger("worldSizeType", worldSizeType);
+	if (worldSizeType == 3)
+		nbttagcompound->setInteger("LimitedChunkRadius", limitedChunkRadius);
 	if (nbttagcompound1 != nullptr)
 	{
 		if (nbttagcompound1 == playerTag)
@@ -324,14 +331,17 @@ void WorldInfo::setWorldSizeType(int_t type)
 }
 int_t WorldInfo::getLimitedWorldMinChunk() const
 {
+	if (worldSizeType == 3) return -limitedChunkRadius;
 	return worldSizeType == 2 ? -27 : -8;
 }
 int_t WorldInfo::getLimitedWorldMaxChunk() const
 {
+	if (worldSizeType == 3) return limitedChunkRadius - 1;
 	return worldSizeType == 2 ? 26 : 7;
 }
 double WorldInfo::getLimitedWorldBoundary() const
 {
+	if (worldSizeType == 3) return static_cast<double>(limitedChunkRadius) * 16.0 - 0.5;
 	return worldSizeType == 2 ? 431.5 : 127.5;
 }
 

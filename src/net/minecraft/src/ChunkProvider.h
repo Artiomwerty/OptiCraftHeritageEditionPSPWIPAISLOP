@@ -66,6 +66,10 @@ public:
 	Chunk  *provideChunk(int_t i, int_t j) override;
 	void    populate(IChunkProvider *ichunkprovider, int_t i, int_t j) override;
 	bool    saveChunks(bool flag, IProgressUpdate *iprogressupdate) override;
+	// PC world generator: saves (if dirty) and frees every loaded chunk outside the box. Returns count.
+	// dropPendingTicks: after saving, remove the chunk's scheduled block updates from the world (the
+	// generator never ticks, so they would pile up and every later save would scan them all).
+	int_t   unloadChunksOutside(int_t minX, int_t minZ, int_t maxX, int_t maxZ, bool dropPendingTicks = false);
 	bool    unload100OldestChunks() override;
 	bool    canSave() override;
 	jstring makeString() override;

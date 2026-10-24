@@ -6,6 +6,7 @@
 #include <sstream>
 
 #include "World.h"
+#include "NextTickListEntry.h"
 #include "WorldInfo.h"
 #include "WorldProvider.h"
 #include "Chunk.h"
@@ -1546,6 +1547,51 @@ bool ChunkProvider::unload100OldestChunks()
 
 	const bool childUnloaded = chunkProvider != nullptr && chunkProvider->unload100OldestChunks();
 	return unloaded > 0 || childUnloaded;
+}
+
+int_t ChunkProvider::unloadChunksOutside(int_t minX, int_t minZ, int_t maxX, int_t maxZ, bool dropPendingTicks)
+{
+	// Collect first: unloading runs tile entity / entity callbacks that may touch the chunk map.
+	std::vector<std::uint64_t> victims;
+	for (const auto &entry : chunkMap)
+	{
+		Chunk *chunk = entry.second;
+		if (chunk == nullptr || chunk == blankChunk)
+			continue;
+		if (chunk->xPosition >= minX && chunk->xPosition <= maxX && chunk->zPosition >= minZ && chunk->zPosition <= maxZ)
+			continue;
+		victims.push_back(entry.first);
+	}
+	int_t unloaded = 0;
+	for (std::uint64_t key : victims)
+	{
+		auto it = chunkMap.find(key);
+		if (it == chunkMap.end() || it->second == nullptr || it->second == blankChunk)
+			continue;
+		Chunk *chunk = it->second;
+		droppedChunksSet.erase(key);
+		if (dropPendingTicks && worldObj != nullptr)
+		{
+			if (!chunk->neverSave && chunk->needsSaving(false))
+			{
+				saveChunkToFile(chunk); // writes the pending ticks into the chunk's NBT
+				chunk->isModified = false;
+				chunk->clearRuntimeSaveRequired();
+				saveExtraChunkData(chunk);
+			}
+			for (NextTickListEntry *entry : worldObj->getPendingBlockUpdates(chunk, true))
+				delete entry;
+		}
+		unloadChunk(key, chunk);
+		it = chunkMap.find(key);
+		if (it != chunkMap.end())
+			chunkMap.erase(it);
+		chunkList.erase(std::remove(chunkList.begin(), chunkList.end(), chunk), chunkList.end());
+		++unloaded;
+	}
+	if (unloaded > 0)
+		markChunkTopologyChanged();
+	return unloaded;
 }
 
 bool ChunkProvider::canSave()

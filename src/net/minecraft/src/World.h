@@ -109,6 +109,8 @@ protected:
 	virtual void getInitialSpawnLocation();
 
 public:
+	// PC world generator: pick the spawn again after the world size changed.
+	void regenerateSpawnPoint() { generateSpawnPoint(); }
 	virtual void setSpawnLocation();
 	int_t getFirstUncoveredBlock(int_t i, int_t j);
 	void emptyMethod1();
@@ -613,6 +615,7 @@ public:
 	std::string getChunkProviderStats();
 	int_t getLoadedChunkCount() const;
 	void unloadAllChunks();
+	void processUnloadedEntities();
 	void initializeWeatherStrengths();
 
 private:

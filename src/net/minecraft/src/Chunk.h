@@ -134,7 +134,7 @@ public:
 	BiomeGenBase *func_48490_a(int_t localX, int_t localZ, WorldChunkManager *manager);
 	void updateSkylight();
 	void resetRelightChecks();
-	void enqueueRelightChecks();
+	void enqueueRelightChecks(int_t iterations = 8);
 
 	std::vector<byte_t> &getBiomeArray();
 	const std::vector<byte_t> &getBiomeArray() const;

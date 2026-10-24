@@ -673,6 +673,14 @@ void World::generateSpawnPoint()
         minChunk = -20;
         maxChunk = 19;
     }
+    else if (worldSizeType == 3 && worldInfo != nullptr && worldInfo->getLimitedChunkRadius() > 4) // pre-generated
+    {
+        const int_t r = worldInfo->getLimitedChunkRadius();
+        searchRadius = 256;
+        maxOffset = std::min<int_t>(192, (r - 4) * 8);
+        minChunk = -r + 2;
+        maxChunk = r - 3;
+    }
     else // Infinite
     {
         searchRadius = 256;
@@ -3396,53 +3404,7 @@ void World::updateEntities()
     // Java: loadedEntityList.removeAll(unloadedEntityList). Keep the unload
     // list in insertion order because it is iterated immediately afterwards for
     // chunk removal, skin release and entity-removal callbacks.
-    if (!unloadedEntityList.empty())
-    {
-        for (Entity *entity : unloadedEntityList)
-            untrackLoadedEntityPointer(entity);
-#if PLATFORM_PC_LEGACY
-        loadedEntityList.erase(
-            std::remove_if(loadedEntityList.begin(), loadedEntityList.end(),
-                [this](Entity* entity)
-                {
-                    return loadedEntityPointerSet.find(entity) == loadedEntityPointerSet.end();
-                }),
-            loadedEntityList.end());
-#else
-        loadedEntityList.erase(
-            std::remove_if(loadedEntityList.begin(), loadedEntityList.end(),
-                [this](Entity* entity)
-                {
-                    return std::find(unloadedEntityList.begin(), unloadedEntityList.end(), entity) != unloadedEntityList.end();
-                }),
-            loadedEntityList.end());
-#endif
-        entityCountsDirty = true;
-    }
-
-    // Remove unloaded entities from their chunks
-    for (size_t j = 0; j < unloadedEntityList.size(); j++)
-    {
-        Entity* entity = unloadedEntityList[j];
-        int chunkX = entity->chunkCoordX;
-        int chunkZ = entity->chunkCoordZ;
-        
-        if (entity->addedToChunk)
-        {
-            Chunk *chunk = getChunkIfExists(chunkX, chunkZ);
-            if (chunk != nullptr)
-                chunk->removeEntity(entity);
-        }
-    }
-    
-    for (size_t j = 0; j < unloadedEntityList.size(); j++)
-    {
-        releaseEntitySkin(unloadedEntityList[j]);
-        onEntityRemoved(unloadedEntityList[j]);
-        destroyEntity(unloadedEntityList[j]);
-    }
-    
-    unloadedEntityList.clear();
+    processUnloadedEntities();
 #if PLATFORM_PROFILE_RENDER_PHASES
     platformProfileTickPhase("entUnload", System::nanoTime() - platformPhaseStartNs);
     platformPhaseStartNs = System::nanoTime();
@@ -4436,10 +4398,14 @@ bool World::updatingLighting()
                     const uint64_t nowUs = PlatformCompat::getMonotonicMicros();
                     const double elapsedMs = (nowUs > floodfillStartUs) ? (double)(nowUs - floodfillStartUs) / 1000.0 : 0.0;
                     const int affectedSubsections = world->lightingDirtyRegions.getFlushedCount();
+#if MC_LOG_LEVEL >= 2
                     if (affectedSubsections > 0 || elapsedMs >= 0.1)
                     {
                         printf("[PERF] Skylight floodfill time: %.2f ms (subsecciones afectadas: %d)\n", elapsedMs, affectedSubsections);
                     }
+#else
+                    (void)elapsedMs; (void)affectedSubsections;
+#endif
                 }
             }
             DirtyBatchScope(const DirtyBatchScope &) = delete;
@@ -5163,10 +5129,12 @@ void World::func_48458_a(int_t chunkOriginX, int_t chunkOriginZ, Chunk *chunk)
         }
     }
 
-#if !PLATFORM_PSP
-    // Later-version relight sweep (not in 1.2.5): 8 columns x 16 blocks per call, each with six
-    // neighbour reads and up to three lighting updates. On the PSP it was the bulk of the random
-    // tick phase (6-19 ms per tick) for minutes after every chunk load; terrain is lit at generation.
+#if PLATFORM_PSP
+    // Later-version relight sweep (not in 1.2.5). The full rate (8 column steps per visit, each with
+    // six neighbour reads and up to three lighting updates per block) cost 6-19 ms per tick on the
+    // PSP for minutes after every chunk load; one step per visit keeps it at about an eighth.
+    chunk->enqueueRelightChecks(1);
+#else
     chunk->enqueueRelightChecks();
 #endif
 }
@@ -6475,4 +6443,57 @@ int_t World::getHeight()
 bool World::func_48452_a()
 {
     return false;
+}
+
+// Removes entities queued by unloadEntities() (chunk unloads) from the world and frees them. Run by
+// updateEntities() every tick; the PC world generator calls it directly since it never ticks.
+void World::processUnloadedEntities()
+{
+    if (!unloadedEntityList.empty())
+    {
+        for (Entity *entity : unloadedEntityList)
+            untrackLoadedEntityPointer(entity);
+#if PLATFORM_PC_LEGACY
+        loadedEntityList.erase(
+            std::remove_if(loadedEntityList.begin(), loadedEntityList.end(),
+                [this](Entity* entity)
+                {
+                    return loadedEntityPointerSet.find(entity) == loadedEntityPointerSet.end();
+                }),
+            loadedEntityList.end());
+#else
+        loadedEntityList.erase(
+            std::remove_if(loadedEntityList.begin(), loadedEntityList.end(),
+                [this](Entity* entity)
+                {
+                    return std::find(unloadedEntityList.begin(), unloadedEntityList.end(), entity) != unloadedEntityList.end();
+                }),
+            loadedEntityList.end());
+#endif
+        entityCountsDirty = true;
+    }
+
+    // Remove unloaded entities from their chunks
+    for (size_t j = 0; j < unloadedEntityList.size(); j++)
+    {
+        Entity* entity = unloadedEntityList[j];
+        int chunkX = entity->chunkCoordX;
+        int chunkZ = entity->chunkCoordZ;
+        
+        if (entity->addedToChunk)
+        {
+            Chunk *chunk = getChunkIfExists(chunkX, chunkZ);
+            if (chunk != nullptr)
+                chunk->removeEntity(entity);
+        }
+    }
+    
+    for (size_t j = 0; j < unloadedEntityList.size(); j++)
+    {
+        releaseEntitySkin(unloadedEntityList[j]);
+        onEntityRemoved(unloadedEntityList[j]);
+        destroyEntity(unloadedEntityList[j]);
+    }
+    
+    unloadedEntityList.clear();
 }

@@ -162,7 +162,8 @@ WorldChunkManager::WorldChunkManager(World *world)
     if (world != nullptr && world->isLimitedWorld())
     {
         worldSizeType = world->getWorldInfo() != nullptr ? world->getWorldInfo()->getWorldSizeType() : 1;
-        limitedWorld = (worldSizeType != 0);
+        // Type 3 (pre-generated on PC) keeps the generator's own biomes: no ocean rim.
+        limitedWorld = (worldSizeType != 0 && worldSizeType != 3);
     }
 }
 

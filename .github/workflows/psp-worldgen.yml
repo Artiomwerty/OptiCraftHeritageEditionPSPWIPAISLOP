@@ -1,0 +1,67 @@
+name: PSP world generator (Windows)
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [psp-port]
+    paths:
+      - "src/**"
+      - "scripts/psp-worldgen/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/psp-worldgen.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: psp-worldgen-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  worldgen-windows:
+    name: Windows x64 world generator
+    timeout-minutes: 90
+    runs-on: windows-2025
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: false
+
+      - name: Clone SDL_net (pinned)
+        run: |
+          if not exist "external\SDL_net\CMakeLists.txt" (
+            git clone --depth 1 https://github.com/libsdl-org/SDL_net.git external/SDL_net
+            cd external\SDL_net
+            git fetch --depth 1 origin b1085eed744eab0c894a5306d822c9241bcf0228
+            git checkout FETCH_HEAD
+          )
+        shell: cmd
+
+      - name: Configure
+        run: >
+          cmake -B build/gcc-release -G Ninja
+          -DCMAKE_C_COMPILER=gcc
+          -DCMAKE_CXX_COMPILER=g++
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_MAKE_PROGRAM=ninja
+          -DMC_LOG_LEVEL=0
+          "-DCMAKE_CXX_FLAGS=-I${{ github.workspace }}/src/net/minecraft/src"
+
+      - name: Build
+        run: cmake --build build/gcc-release --parallel --target OptiCraft
+
+      - name: Package
+        run: |
+          mkdir -p dist/OptiCraftPSPWorldGen
+          cp bin/Release/OptiCraft.exe dist/OptiCraftPSPWorldGen/OptiCraft.exe
+          cp scripts/psp-worldgen/GeneratePSPWorld.bat dist/OptiCraftPSPWorldGen/
+          cp scripts/psp-worldgen/README.txt dist/OptiCraftPSPWorldGen/
+        shell: bash
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OptiCraftPSPWorldGen
+          path: dist/OptiCraftPSPWorldGen
+          if-no-files-found: error

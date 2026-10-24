@@ -15,6 +15,7 @@
 
 #include "lwjgl/GLContext.h"
 #include "pc/render/PcRenderBackend.h"
+#include "pc/world/WorldPregen.h"
 
 namespace
 {
@@ -99,6 +100,10 @@ std::string loadUsername()
 
 int main(int argc, char *argv[])
 {
+	// PSP world generator: no window, no audio, just generate and save (see pc/world/WorldPregen.cpp).
+	if (argc >= 2 && std::strcmp(argv[1], "--pregen") == 0)
+		return runWorldPregen(argc, argv);
+
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER | SDL_INIT_AUDIO) < 0)
 		throw SDLException();
 	pcRenderBackendSetRequested(loadRenderBackendPreference());

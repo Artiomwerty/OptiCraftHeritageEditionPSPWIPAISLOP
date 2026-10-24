@@ -1819,11 +1819,11 @@ void Chunk::resetRelightChecks()
 	queuedLightChecks = 0;
 }
 
-void Chunk::enqueueRelightChecks()
+void Chunk::enqueueRelightChecks(int_t iterations)
 {
 	if (worldObj == nullptr)
 		return;
-	for (int_t iteration = 0; iteration < 8; ++iteration)
+	for (int_t iteration = 0; iteration < iterations; ++iteration)
 	{
 		if (queuedLightChecks >= 4096)
 			return;

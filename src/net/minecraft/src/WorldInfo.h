@@ -75,6 +75,9 @@ public:
 	int_t getLimitedWorldMinChunk() const;
 	int_t getLimitedWorldMaxChunk() const;
 	double getLimitedWorldBoundary() const;
+	// worldSizeType 3: a pre-generated world (PC world generator) of chunks -radius .. radius-1.
+	int_t getLimitedChunkRadius() const { return limitedChunkRadius; }
+	void setLimitedChunkRadius(int_t radius) { limitedChunkRadius = radius; }
 
 private:
 	long_t randomSeed;
@@ -99,4 +102,5 @@ private:
 	int_t thunderTime;
 	bool limitedWorld;
 	int_t worldSizeType;
+	int_t limitedChunkRadius = 0;
 };
