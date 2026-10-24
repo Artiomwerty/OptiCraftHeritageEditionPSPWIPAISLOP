@@ -3,6 +3,8 @@
 #include <vector>
 #include <array>
 #include <cstdint>
+#include <unordered_map>
+#include <vector>
 #include <set>
 #include <unordered_set>
 #include <typeinfo>
@@ -616,6 +618,18 @@ public:
 	int_t getLoadedChunkCount() const;
 	void unloadAllChunks();
 	void processUnloadedEntities();
+	// PC world generator: forget scheduled block updates outside the block box (their chunks are saved).
+	int_t dropPendingBlockUpdatesOutside(int_t minX, int_t minZ, int_t maxX, int_t maxZ);
+	// PC world generator: keep scheduled block updates bucketed by chunk, so saving a chunk does not
+	// scan every pending update in the world. Enable before any chunk is generated.
+	void enablePendingTickChunkIndex() { pendingTickIndexEnabled = true; }
+	bool pendingTickIndexEnabled = false;
+	std::unordered_map<std::uint64_t, std::vector<NextTickListEntry *>> pendingTickIndex;
+	static std::uint64_t pendingTickChunkKey(int_t blockX, int_t blockZ)
+	{
+		return (static_cast<std::uint64_t>(static_cast<std::uint32_t>(blockX >> 4)) << 32) |
+		       static_cast<std::uint32_t>(blockZ >> 4);
+	}
 	void initializeWeatherStrengths();
 
 private:

@@ -3199,6 +3199,8 @@ void World::scheduleBlockUpdate(int x, int y, int z, int blockId, int delay)
     {
         scheduledTickTreeSet.insert(entry);
         scheduledTickOrder.add(entry);
+        if (pendingTickIndexEnabled)
+            pendingTickIndex[pendingTickChunkKey(entry->xCoord, entry->zCoord)].push_back(entry);
     }
     else
     {
@@ -3228,6 +3230,8 @@ void World::scheduleBlockUpdateFromLoad(int_t x, int_t y, int_t z, int_t blockId
     {
         scheduledTickTreeSet.insert(entry);
         scheduledTickOrder.add(entry);
+        if (pendingTickIndexEnabled)
+            pendingTickIndex[pendingTickChunkKey(entry->xCoord, entry->zCoord)].push_back(entry);
     }
     else
         delete entry;
@@ -3245,6 +3249,27 @@ std::vector<NextTickListEntry *> World::getPendingBlockUpdates(Chunk *chunk, boo
         return result;
     return pcLegacyTickScheduler->getPendingForChunk(chunk->xPosition, chunk->zPosition, remove);
 #else
+    if (pendingTickIndexEnabled)
+    {
+        // Generator path: one bucket per chunk instead of scanning every pending update.
+        auto bucket = pendingTickIndex.find(pendingTickChunkKey(JavaArithmetic::intShl(chunk->xPosition, 4),
+                                                                JavaArithmetic::intShl(chunk->zPosition, 4)));
+        if (bucket == pendingTickIndex.end())
+            return result;
+        result = bucket->second;
+        if (remove)
+        {
+            for (NextTickListEntry *entry : result)
+            {
+                scheduledTickTreeSet.erase(entry);
+                scheduledTickSet.erase(entry);
+                scheduledTickOrder.remove(entry);
+            }
+            pendingTickIndex.erase(bucket);
+        }
+        return result;
+    }
+
     const int_t minX = JavaArithmetic::intShl(chunk->xPosition, 4);
     const int_t maxX = JavaArithmetic::intAdd(minX, 16);
     const int_t minZ = JavaArithmetic::intShl(chunk->zPosition, 4);
@@ -5398,6 +5423,15 @@ bool World::TickUpdates(bool flag)
         scheduledTickTreeSet.erase(it);
         scheduledTickSet.erase(entry);
         scheduledTickOrder.remove(entry);
+        if (pendingTickIndexEnabled)
+        {
+            auto bucket = pendingTickIndex.find(pendingTickChunkKey(entry->xCoord, entry->zCoord));
+            if (bucket != pendingTickIndex.end())
+            {
+                std::vector<NextTickListEntry *> &v = bucket->second;
+                v.erase(std::remove(v.begin(), v.end(), entry), v.end());
+            }
+        }
 #endif
 
         const int RANGE = 8;
@@ -6496,4 +6530,51 @@ void World::processUnloadedEntities()
     }
     
     unloadedEntityList.clear();
+}
+
+int_t World::dropPendingBlockUpdatesOutside(int_t minX, int_t minZ, int_t maxX, int_t maxZ)
+{
+#if PLATFORM_PC_LEGACY && PC_LEGACY_TICK_SCHEDULER
+    (void)minX; (void)minZ; (void)maxX; (void)maxZ;
+    return 0;
+#else
+    int_t dropped = 0;
+    if (pendingTickIndexEnabled)
+    {
+        for (auto bucket = pendingTickIndex.begin(); bucket != pendingTickIndex.end(); )
+        {
+            const int_t cx = static_cast<int_t>(static_cast<std::int32_t>(bucket->first >> 32)) * 16;
+            const int_t cz = static_cast<int_t>(static_cast<std::int32_t>(bucket->first & 0xffffffffu)) * 16;
+            if (cx >= minX && cx + 15 <= maxX && cz >= minZ && cz + 15 <= maxZ)
+            {
+                ++bucket;
+                continue;
+            }
+            for (NextTickListEntry *entry : bucket->second)
+            {
+                scheduledTickTreeSet.erase(entry);
+                scheduledTickSet.erase(entry);
+                scheduledTickOrder.remove(entry);
+                delete entry;
+                ++dropped;
+            }
+            bucket = pendingTickIndex.erase(bucket);
+        }
+        return dropped;
+    }
+    const std::vector<NextTickListEntry *> pendingOrder = scheduledTickOrder.valuesInIterationOrder();
+    for (NextTickListEntry *entry : pendingOrder)
+    {
+        if (entry == nullptr)
+            continue;
+        if (entry->xCoord >= minX && entry->xCoord <= maxX && entry->zCoord >= minZ && entry->zCoord <= maxZ)
+            continue;
+        scheduledTickTreeSet.erase(entry);
+        scheduledTickSet.erase(entry);
+        scheduledTickOrder.remove(entry);
+        delete entry;
+        ++dropped;
+    }
+    return dropped;
+#endif
 }

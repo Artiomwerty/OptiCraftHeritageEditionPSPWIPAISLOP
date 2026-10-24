@@ -118,6 +118,7 @@ int runWorldPregen(int argc, char **argv)
 	// biome layout must be the generator's own. The fixed size is written into level.dat at the end.
 	WorldSettings settings(seed, 0, true, false, WorldType::DEFAULT, 0);
 	World *world = new World(saveHandler, worldName, &settings);
+	world->enablePendingTickChunkIndex();
 	ChunkProvider *provider = dynamic_cast<ChunkProvider *>(world->getIChunkProvider());
 	if (provider == nullptr)
 	{
@@ -157,6 +158,7 @@ int runWorldPregen(int argc, char **argv)
 			if (chunk != nullptr)
 				chunk->updateSkylight();
 		provider->unloadChunksOutside(-radius - 2, z - 2, radius + 1, radius + 1, true);
+		world->dropPendingBlockUpdatesOutside((-radius - 2) * 16, (z - 2) * 16, (radius + 2) * 16 - 1, (radius + 2) * 16 - 1);
 		world->processUnloadedEntities();
 		ThreadedFileIOBase::threadedIOInstance.waitForFinish();
 		AxisAlignedBB::clearBoundingBoxPool();
