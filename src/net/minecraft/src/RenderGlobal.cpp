@@ -1788,9 +1788,9 @@ void RenderGlobal::renderSky(float f)
 				const float tr = 0.27f * k, tg = 0.50f * k, tb = 0.96f * k;
 				const float dr = fr, dg = fg, db = fb;
 			static const float elev[] = {-90.0f, -35.0f, -8.0f, 0.0f, 8.0f, 20.0f, 38.0f, 62.0f, 90.0f};
-			const int rings = (int)(sizeof(elev) / sizeof(elev[0]));
-			const int segs = 20;
-			const float R = 50.0f;
+			constexpr int rings = (int)(sizeof(elev) / sizeof(elev[0]));
+			constexpr int segs = 20;
+			constexpr float R = 50.0f;
 			auto ringColor = [&](float e, float &cr, float &cg, float &cb) {
 				if (e < 0.0f)
 				{
@@ -1804,23 +1804,42 @@ void RenderGlobal::renderSky(float f)
 					cr = fr + (tr - fr) * t; cg = fg + (tg - fg) * t; cb = fb + (tb - fb) * t;
 				}
 			};
+			// The dome's shape never changes: sin/cos tables are built once (they were ~2000 trig calls
+			// per frame), only the ring colours follow the time of day.
+			static float s_ringY[rings], s_ringH[rings], s_segS[segs + 1], s_segC[segs + 1];
+			static bool s_domeReady = false;
+			if (!s_domeReady)
+			{
+				for (int r = 0; r < rings; ++r)
+				{
+					const float e = elev[r] * 3.1415927f / 180.0f;
+					s_ringY[r] = R * sinf(e);
+					s_ringH[r] = R * cosf(e);
+				}
+				for (int sg = 0; sg <= segs; ++sg)
+				{
+					const float a = (float)sg * 6.2831853f / (float)segs;
+					s_segS[sg] = sinf(a);
+					s_segC[sg] = cosf(a);
+				}
+				s_domeReady = true;
+			}
+			float ringR[rings], ringG[rings], ringB[rings];
+			for (int r = 0; r < rings; ++r)
+				ringColor(elev[r], ringR[r], ringG[r], ringB[r]);
 			tessellator->startDrawingQuads();
 			for (int r = 0; r + 1 < rings; ++r)
 			{
-				const float e0 = elev[r] * 3.1415927f / 180.0f, e1 = elev[r + 1] * 3.1415927f / 180.0f;
-				float c0r, c0g, c0b, c1r, c1g, c1b;
-				ringColor(elev[r], c0r, c0g, c0b);
-				ringColor(elev[r + 1], c1r, c1g, c1b);
+				const float y0 = s_ringY[r], h0 = s_ringH[r], y1 = s_ringY[r + 1], h1 = s_ringH[r + 1];
 				for (int sg = 0; sg < segs; ++sg)
 				{
-					const float a0 = (float)sg * 6.2831853f / (float)segs, a1 = (float)(sg + 1) * 6.2831853f / (float)segs;
-					const float y0 = R * sinf(e0), h0 = R * cosf(e0), y1 = R * sinf(e1), h1 = R * cosf(e1);
-					tessellator->setColorRGBA_F(c0r, c0g, c0b, 1.0f);
-					tessellator->addVertex(h0 * sinf(a0), y0, h0 * cosf(a0));
-					tessellator->addVertex(h0 * sinf(a1), y0, h0 * cosf(a1));
-					tessellator->setColorRGBA_F(c1r, c1g, c1b, 1.0f);
-					tessellator->addVertex(h1 * sinf(a1), y1, h1 * cosf(a1));
-					tessellator->addVertex(h1 * sinf(a0), y1, h1 * cosf(a0));
+					const float s0 = s_segS[sg], c0 = s_segC[sg], s1 = s_segS[sg + 1], c1 = s_segC[sg + 1];
+					tessellator->setColorRGBA_F(ringR[r], ringG[r], ringB[r], 1.0f);
+					tessellator->addVertex(h0 * s0, y0, h0 * c0);
+					tessellator->addVertex(h0 * s1, y0, h0 * c1);
+					tessellator->setColorRGBA_F(ringR[r + 1], ringG[r + 1], ringB[r + 1], 1.0f);
+					tessellator->addVertex(h1 * s1, y1, h1 * c1);
+					tessellator->addVertex(h1 * s0, y1, h1 * c0);
 				}
 			}
 			tessellator->draw();
@@ -1957,7 +1976,13 @@ void RenderGlobal::renderSky(float f)
 			// White dots: ~220 fixed pseudo-random stars as small quads on a sphere.
 			renderColor4f(1.0f, 1.0f, 1.0f, f17);
 			renderDisable(RenderCapability::CullFace);
-			tessellator->startDrawingQuads();
+			// Star positions are fixed: built once (each star cost 5 trig/sqrt calls per frame at night).
+			static float s_starXYZ[220 * 4 * 3];
+			static bool s_starsReady = false;
+			if (!s_starsReady)
+			{
+			float *out = s_starXYZ;
+			auto addVertex = [&out](float x, float y, float z) { *out++ = x; *out++ = y; *out++ = z; };
 			std::uint32_t seed = 0x9E3779B9u;
 			auto rnd = [&seed]() { seed = seed * 1664525u + 1013904223u; return (float)(seed >> 8) / 16777216.0f; };
 			for (int si = 0; si < 220; ++si)
@@ -1972,11 +1997,16 @@ void RenderGlobal::renderSky(float f)
 				const float vx = ny * uz - nz * uy, vy = nz * ux - nx * uz, vz = nx * uy - ny * ux;
 				const float R2 = 90.0f, sz = 0.5f + rnd() * 0.5f;
 				const float cx = nx * R2, cy = ny * R2, cz = nz * R2;
-				tessellator->addVertex(cx - ux * sz - vx * sz, cy - uy * sz - vy * sz, cz - uz * sz - vz * sz);
-				tessellator->addVertex(cx + ux * sz - vx * sz, cy + uy * sz - vy * sz, cz + uz * sz - vz * sz);
-				tessellator->addVertex(cx + ux * sz + vx * sz, cy + uy * sz + vy * sz, cz + uz * sz + vz * sz);
-				tessellator->addVertex(cx - ux * sz + vx * sz, cy - uy * sz + vy * sz, cz - uz * sz + vz * sz);
+				addVertex(cx - ux * sz - vx * sz, cy - uy * sz - vy * sz, cz - uz * sz - vz * sz);
+				addVertex(cx + ux * sz - vx * sz, cy + uy * sz - vy * sz, cz + uz * sz - vz * sz);
+				addVertex(cx + ux * sz + vx * sz, cy + uy * sz + vy * sz, cz + uz * sz + vz * sz);
+				addVertex(cx - ux * sz + vx * sz, cy - uy * sz + vy * sz, cz - uz * sz + vz * sz);
 			}
+			s_starsReady = true;
+			}
+			tessellator->startDrawingQuads();
+			for (int vi = 0; vi < 220 * 4; ++vi)
+				tessellator->addVertex(s_starXYZ[vi * 3], s_starXYZ[vi * 3 + 1], s_starXYZ[vi * 3 + 2]);
 			tessellator->draw();
 			renderEnable(RenderCapability::CullFace);
 #elif defined(PS2_PLATFORM) || defined(WII_PLATFORM)

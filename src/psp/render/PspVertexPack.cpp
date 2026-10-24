@@ -6,12 +6,20 @@ namespace PspPack
 {
 namespace
 {
+// round(x / 255) for x in [0, 255*255] without a divide (the Allegrex divider takes ~36 cycles and
+// this runs three times per vertex for every chunk mesh and every immediate draw).
+inline std::uint32_t div255(std::uint32_t x)
+{
+    x += 128u;
+    return (x + (x >> 8)) >> 8;
+}
+
 inline std::uint32_t applyLight(std::uint32_t color, std::uint32_t light)
 {
     const std::uint32_t r = (color & 0xFFu) * ((light >> 16) & 0xFFu);
     const std::uint32_t g = ((color >> 8) & 0xFFu) * ((light >> 8) & 0xFFu);
     const std::uint32_t b = ((color >> 16) & 0xFFu) * (light & 0xFFu);
-    return (color & 0xFF000000u) | (((r + 127u) / 255u)) | (((g + 127u) / 255u) << 8) | (((b + 127u) / 255u) << 16);
+    return (color & 0xFF000000u) | div255(r) | (div255(g) << 8) | (div255(b) << 16);
 }
 
 inline int lightIndexFromBrightness(std::int32_t brightness)
