@@ -354,6 +354,9 @@ static void maybeScreenshot()
     if (!fire || shots >= 8)
         return;
     dumpPresents("screenshot");
+    PspSystem::bootTrace("GE regs at screenshot: fbp %06x fbw %06x pmsk %06x scissor %06x-%06x clear %06x zte %u\n",
+                         sceGeGetCmd(0x9C) & 0xFFFFFF, sceGeGetCmd(0x9D) & 0xFFFFFF, sceGeGetCmd(0xE8) & 0xFFFFFF,
+                         sceGeGetCmd(0xD4) & 0xFFFFFF, sceGeGetCmd(0xD5) & 0xFFFFFF, sceGeGetCmd(0xD3) & 0xFFFFFF, sceGeGetCmd(0x23) & 1);
     void *top = nullptr; int bw = 0, fmt = 0;
     sceDisplayGetFrameBuf(&top, &bw, &fmt, PSP_DISPLAY_SETBUF_NEXTFRAME);
     if (!top || bw <= 0 || fmt != PSP_DISPLAY_PIXEL_FORMAT_8888)
@@ -395,6 +398,35 @@ static void maybeScreenshot()
         PspSystem::bootTrace("screenshot: %s\n", path);
     }
     free(bmp);
+}
+
+// Observer only (sends nothing to the GE): after each drawn frame, the GE registers that decide where
+// and whether its pixels were written. A frame whose pixels went to the wrong buffer, or were masked,
+// scissored away or drawn in clear mode, leaves an old picture on screen (the "teleport").
+struct GeCheck { unsigned frames = 0, wrongBuf = 0, masked = 0, scissor = 0, clearMode = 0, logs = 0; };
+static GeCheck g_geCheck;
+static void checkFrameRegs(unsigned drawnBuf, unsigned draws)
+{
+    const unsigned fbp = sceGeGetCmd(0x9C) & 0xFFFFFF;
+    const unsigned pmsk = sceGeGetCmd(0xE8) & 0xFFFFFF;
+    const unsigned sc1 = sceGeGetCmd(0xD4) & 0xFFFFFF, sc2 = sceGeGetCmd(0xD5) & 0xFFFFFF;
+    const unsigned clear = sceGeGetCmd(0xD3) & 0xFFFFFF;
+    const unsigned x1 = sc1 & 0x3FF, y1 = (sc1 >> 10) & 0x3FF, x2 = sc2 & 0x3FF, y2 = (sc2 >> 10) & 0x3FF;
+    ++g_geCheck.frames;
+    const bool wrongBuf = fbp != drawnBuf;
+    const bool masked = pmsk == 0xFFFFFF;
+    const bool smallScissor = x2 < x1 + 400 || y2 < y1 + 200;
+    const bool clearMode = (clear & 1) != 0;
+    if (wrongBuf) ++g_geCheck.wrongBuf;
+    if (masked) ++g_geCheck.masked;
+    if (smallScissor) ++g_geCheck.scissor;
+    if (clearMode) ++g_geCheck.clearMode;
+    if ((wrongBuf || masked || smallScissor || clearMode) && g_geCheck.logs < 25)
+    {
+        ++g_geCheck.logs;
+        PspSystem::bootTrace("GE check: frame drew %u calls but fbp %06x (expected %06x) pmsk %06x scissor %u,%u-%u,%u clear %06x zte %u fbw %06x\n",
+                             draws, fbp, drawnBuf, pmsk, x1, y1, x2, y2, clear, sceGeGetCmd(0x23) & 1, sceGeGetCmd(0x9D) & 0xFFFFFF);
+    }
 }
 
 static void startList()
@@ -486,6 +518,7 @@ void present()
                                  g_stats.lastDrawCalls, g_stats.lastVertices, g_prof.gui, g_prof.world / 120, g_prof.overlay / 120, g_prof.clear / 120, g_prof.screen / 120);
             { const struct mallinfo mi = mallinfo(); PspSystem::bootTrace("mem: heap used %u KB, arena %u KB, arenaDrops %u, audio blocks %u voices %d err %d\n", (unsigned)(mi.uordblks / 1024), (unsigned)(mi.arena / 1024), (unsigned)g_stats.arenaDrops, (unsigned)g_pspAudioBlocks, (int)g_pspAudioVoices, (int)g_pspAudioLastError); }
             PspSystem::bootTrace("frames: empty %u (longest run %u), startFail %u, syncErr %u, dispMismatch %u, sameBuf %u, lateFlips %u flipWaits %u\n", g_diag.empty, g_diag.maxEmptyRun, g_diag.startFail, g_diag.syncErr, g_diag.dispMismatch, g_diag.sameBuf, g_diag.lateFlips, g_diag.flipWaits);
+            PspSystem::bootTrace("GE check: %u frames, wrong buffer %u, colour masked %u, small scissor %u, clear mode %u\n", g_geCheck.frames, g_geCheck.wrongBuf, g_geCheck.masked, g_geCheck.scissor, g_geCheck.clearMode);
             dumpCallers();
             PspProfile::dump();
             g_prof = Prof();
@@ -512,6 +545,7 @@ void present()
         sceDisplayGetFrameBuf(&top, &bw, &fmt, PSP_DISPLAY_SETBUF_NEXTFRAME);
         const unsigned disp = reinterpret_cast<unsigned>(top) & 0x1FFFFFu;
         recordPresent(caller, false, disp, geState);
+        checkFrameRegs(disp, g_stats.drawCalls);
         if (lateFlip)
         {
             ++g_diag.lateFlips;
